@@ -307,4 +307,7 @@ config OID_REGISTRY
 	help
 	  Enable fast lookup object identifier registry.
 
+config LLIST
+	bool
+
 endmenu
