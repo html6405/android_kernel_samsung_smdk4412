@@ -27,26 +27,15 @@ int create_user_ns(struct cred *new)
 {
 	struct user_namespace *ns, *parent_ns = new->user_ns;
 	struct user_struct *root_user;
-	int n;
-	int ret;
 
 	ns = kmem_cache_alloc(user_ns_cachep, GFP_KERNEL);
 	if (!ns)
 		return -ENOMEM;
 
-	ret = proc_alloc_inum(&ns->proc_inum);
-	if (ret) {
-		kmem_cache_free(user_ns_cachep, ns);
-		return ret;
-	}
-
 	kref_init(&ns->kref);
 
-	for (n = 0; n < UIDHASH_SZ; ++n)
-		INIT_HLIST_HEAD(ns->uidhash_table + n);
-
 	/* Alloc new root user.  */
-	root_user = alloc_uid(ns, 0);
+	root_user = alloc_uid(make_kuid(ns, 0));
 	if (!root_user) {
 		kmem_cache_free(user_ns_cachep, ns);
 		return -ENOMEM;
