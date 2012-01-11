@@ -3070,7 +3070,10 @@ static bool yield_to_task_fair(struct rq *rq, struct task_struct *p, bool preemp
 static unsigned long __read_mostly max_load_balance_interval = HZ/10;
 
 #define LBF_ALL_PINNED	0x01
-#define LBF_NEED_BREAK	0x02
+#define LBF_NEED_BREAK	0x02	/* clears into HAD_BREAK */
+#define LBF_HAD_BREAK	0x04
+#define LBF_HAD_BREAKS	0x0C	/* count HAD_BREAKs overflows into ABORT */
+#define LBF_ABORT	0x10
 
 struct lb_env {
 	struct sched_domain	*sd;
@@ -4461,8 +4464,13 @@ more_balance:
 		double_rq_unlock(this_rq, busiest);
 		local_irq_restore(flags);
 
+		if (env.flags & LBF_ABORT)
+			goto out_balanced;
+
 		if (env.flags & LBF_NEED_BREAK) {
-			env.flags &= ~LBF_NEED_BREAK;
+			env.flags += LBF_HAD_BREAK - LBF_NEED_BREAK;
+			if (env.flags & LBF_ABORT)
+				goto out_balanced;
 			goto more_balance;
 		}
 
