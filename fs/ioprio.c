@@ -142,9 +142,7 @@ return -EPERM;
 				break;
 
 			do_each_thread(g, p) {
-				const struct cred *tcred = __task_cred(p);
-				kuid_t tcred_uid = make_kuid(tcred->user_ns, tcred->uid);
-				if (!uid_eq(tcred_uid, uid))
+				if (!uid_eq(task_uid(p), uid))
 					continue;
 				ret = set_task_ioprio(p, ioprio);
 				if (ret)
@@ -241,9 +239,7 @@ SYSCALL_DEFINE2(ioprio_get, int, which, int, who)
 				break;
 
 			do_each_thread(g, p) {
-				const struct cred *tcred = __task_cred(p);
-				kuid_t tcred_uid = make_kuid(tcred->user_ns, tcred->uid);
-				if (!uid_eq(tcred_uid, user->uid))
+				if (!uid_eq(task_uid(p), user->uid))
 					continue;
 				tmpio = get_task_ioprio(p);
 				if (tmpio < 0)
