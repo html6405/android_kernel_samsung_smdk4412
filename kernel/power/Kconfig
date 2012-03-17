@@ -37,9 +37,11 @@ config FAST_BOOT
 
 config HAS_WAKELOCK
 	bool
+	default y
 
-config HAS_EARLYSUSPEND
+config WAKELOCK
 	bool
+	default y
 
 config WAKELOCK
 	bool "Wake lock"
