@@ -408,7 +408,7 @@ static unsigned char asn1_octets_decode(struct asn1_ctx *ctx,
 
 	ptr = *octets;
 	while (ctx->pointer < eoc) {
-		if (!asn1_octet_decode(ctx, (unsigned char *)ptr++)) {
+		if (!asn1_octet_decode(ctx, ptr++)) {
 			kfree(*octets);
 			*octets = NULL;
 			return 0;
