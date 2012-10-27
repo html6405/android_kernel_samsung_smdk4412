@@ -40,6 +40,7 @@
 #include <linux/reciprocal_div.h>
 #include <linux/ratelimit.h>
 #include <linux/seccomp.h>
+#include <linux/if_vlan.h>
 
 enum {
 	BPF_S_RET_K = 0,
@@ -381,6 +382,11 @@ load_b:
 			continue;
 		case BPF_S_ANC_ALU_XOR_X:
 			A ^= X;
+		case BPF_S_ANC_VLAN_TAG:
+			A = vlan_tx_tag_get(skb);
+			continue;
+		case BPF_S_ANC_VLAN_TAG_PRESENT:
+			A = !!vlan_tx_tag_present(skb);
 			continue;
 		case BPF_S_ANC_NLATTR: {
 			struct nlattr *nla;
@@ -641,6 +647,8 @@ int sk_chk_filter(struct sock_filter *filter, int flen)
 			ANCILLARY(RXHASH);
 			ANCILLARY(CPU);
 			ANCILLARY(ALU_XOR_X);
+			ANCILLARY(VLAN_TAG);
+			ANCILLARY(VLAN_TAG_PRESENT);
 			}
 		}
 		ftest->code = code;
