@@ -65,7 +65,8 @@
 /* Instruct lower device to use last 4-bytes of skb data as FCS */
 #define SO_NOFCS		0x0027
 
-#define SO_MAX_PACING_RATE	0x0028
+#define SO_LOCK_FILTER          0x0028
+#define SO_MAX_PACING_RATE	0x002B
 
 /* Security levels - as per NRL IPv6 - don't actually do anything */
 #define SO_SECURITY_AUTHENTICATION		0x5001
