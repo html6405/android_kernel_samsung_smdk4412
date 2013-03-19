@@ -143,6 +143,8 @@ ipv6:
 			flow->ports = *ports;
 	}
 
+	flow->thoff = (u16) nhoff;
+
 	return true;
 }
 EXPORT_SYMBOL(skb_flow_dissect);
