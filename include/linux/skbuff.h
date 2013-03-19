@@ -2509,5 +2509,7 @@ static inline void skb_checksum_none_assert(struct sk_buff *skb)
 
 bool skb_partial_csum_set(struct sk_buff *skb, u16 start, u16 off);
 
+u32 __skb_get_poff(const struct sk_buff *skb);
+
 #endif	/* __KERNEL__ */
 #endif	/* _LINUX_SKBUFF_H */

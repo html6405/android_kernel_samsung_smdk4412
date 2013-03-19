@@ -4,6 +4,10 @@
 #include <linux/ipv6.h>
 #include <linux/if_vlan.h>
 #include <net/ip.h>
+#include <linux/igmp.h>
+#include <linux/icmp.h>
+#include <linux/sctp.h>
+#include <linux/dccp.h>
 #include <linux/if_tunnel.h>
 #include <linux/if_pppox.h>
 #include <linux/ppp_defs.h>
@@ -142,3 +146,56 @@ ipv6:
 	return true;
 }
 EXPORT_SYMBOL(skb_flow_dissect);
+
+/* __skb_get_poff() returns the offset to the payload as far as it could
+ * be dissected. The main user is currently BPF, so that we can dynamically
+ * truncate packets without needing to push actual payload to the user
+ * space and can analyze headers only, instead.
+ */
+u32 __skb_get_poff(const struct sk_buff *skb)
+{
+	struct flow_keys keys;
+	u32 poff = 0;
+
+	if (!skb_flow_dissect(skb, &keys))
+		return 0;
+
+	poff += keys.thoff;
+	switch (keys.ip_proto) {
+	case IPPROTO_TCP: {
+		const struct tcphdr *tcph;
+		struct tcphdr _tcph;
+
+		tcph = skb_header_pointer(skb, poff, sizeof(_tcph), &_tcph);
+		if (!tcph)
+			return poff;
+
+		poff += max_t(u32, sizeof(struct tcphdr), tcph->doff * 4);
+		break;
+	}
+	case IPPROTO_UDP:
+	case IPPROTO_UDPLITE:
+		poff += sizeof(struct udphdr);
+		break;
+	/* For the rest, we do not really care about header
+	 * extensions at this point for now.
+	 */
+	case IPPROTO_ICMP:
+		poff += sizeof(struct icmphdr);
+		break;
+	case IPPROTO_ICMPV6:
+		poff += sizeof(struct icmp6hdr);
+		break;
+	case IPPROTO_IGMP:
+		poff += sizeof(struct igmphdr);
+		break;
+	case IPPROTO_DCCP:
+		poff += sizeof(struct dccp_hdr);
+		break;
+	case IPPROTO_SCTP:
+		poff += sizeof(struct sctphdr);
+		break;
+	}
+
+	return poff;
+}
