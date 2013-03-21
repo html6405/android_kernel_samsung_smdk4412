@@ -6,6 +6,7 @@
 #define __LINUX_FILTER_H__
 
 #include <linux/compiler.h>
+#include <linux/kernel.h>
 #include <linux/types.h>
 
 #ifdef __KERNEL__
@@ -160,6 +161,16 @@ extern int sk_chk_filter(struct sock_filter *filter, int flen);
 #ifdef CONFIG_BPF_JIT
 extern void bpf_jit_compile(struct sk_filter *fp);
 extern void bpf_jit_free(struct sk_filter *fp);
+
+static inline void bpf_jit_dump(unsigned int flen, unsigned int proglen,
+				u32 pass, void *image)
+{
+	pr_err("flen=%u proglen=%u pass=%u image=%p\n",
+	       flen, proglen, pass, image);
+	if (image)
+		print_hex_dump(KERN_ERR, "JIT code: ", DUMP_PREFIX_ADDRESS,
+			       16, 1, image, proglen, false);
+}
 #define SK_RUN_FILTER(FILTER, SKB) (*FILTER->bpf_func)(SKB, FILTER->insns)
 #else
 static inline void bpf_jit_compile(struct sk_filter *fp)
