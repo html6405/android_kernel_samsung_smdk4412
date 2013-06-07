@@ -2644,6 +2644,59 @@ exit:
 	goto out;
 }
 
+static struct file *do_tmpfile(int dfd, const char *pathname,
+		struct nameidata *nd, int flags, const struct open_flags *op)
+{
+	static const struct qstr name = { .name = "/", .len = 1 };
+	struct dentry *dentry, *child;
+	struct inode *dir;
+	struct file *filp;
+	int error = path_lookupat(dfd, pathname,
+				  flags | LOOKUP_DIRECTORY, nd);
+	if (unlikely(error))
+		return ERR_PTR(error);
+	error = mnt_want_write(nd->path.mnt);
+	if (unlikely(error))
+		goto out;
+	/* we want directory to be writable */
+	error = inode_permission2(nd->path.mnt, nd->inode,
+				  MAY_WRITE | MAY_EXEC);
+	if (error)
+		goto out2;
+	dentry = nd->path.dentry;
+	dir = dentry->d_inode;
+	if (!dir->i_op->tmpfile) {
+		error = -EOPNOTSUPP;
+		goto out2;
+	}
+	child = d_alloc(dentry, &name);
+	if (unlikely(!child)) {
+		error = -ENOMEM;
+		goto out2;
+	}
+	nd->flags &= ~LOOKUP_DIRECTORY;
+	nd->flags |= op->intent;
+	dput(nd->path.dentry);
+	nd->path.dentry = child;
+	error = dir->i_op->tmpfile(dir, nd->path.dentry, op->mode);
+	if (error)
+		goto out2;
+	audit_inode(pathname, nd->path.dentry);
+	error = may_open(&nd->path, op->acc_mode, op->open_flag);
+	if (error)
+		goto out2;
+	filp = nameidata_to_filp(nd);
+	if (IS_ERR(filp)) {
+		error = PTR_ERR(filp);
+		goto out2;
+	}
+out2:
+	mnt_drop_write(nd->path.mnt);
+out:
+	path_put(&nd->path);
+	return error ? ERR_PTR(error) : filp;
+}
+
 static struct file *path_openat(int dfd, const char *pathname,
 		struct nameidata *nd, const struct open_flags *op, int flags)
 {
@@ -2660,6 +2713,11 @@ static struct file *path_openat(int dfd, const char *pathname,
 	nd->intent.open.file = filp;
 	nd->intent.open.flags = open_to_namei_flags(op->open_flag);
 	nd->intent.open.create_mode = op->mode;
+
+	if (unlikely(filp->f_flags & O_TMPFILE)) {
+		filp = do_tmpfile(dfd, pathname, nd, flags, op);
+		goto out;
+	}
 
 	error = path_init(dfd, pathname, flags | LOOKUP_PARENT, nd, &base);
 	if (unlikely(error))
