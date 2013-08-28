@@ -12,7 +12,7 @@ obj-y			:= filemap.o mempool.o oom_kill.o fadvise.o \
 			   maccess.o page-writeback.o \
 			   readahead.o swap.o truncate.o vmscan.o shmem.o \
 			   prio_tree.o util.o mmzone.o vmstat.o backing-dev.o \
-			   mm_init.o mmu_context.o percpu.o \
+			   mm_init.o mmu_context.o percpu.o list_lru.o \
 			   $(mmu-y)
 
 ifdef CONFIG_SLP
