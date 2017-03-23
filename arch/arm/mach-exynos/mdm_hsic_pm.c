@@ -650,6 +650,19 @@ int set_qmicm_mode(const char *name)
 	return 0;
 }
 
+int get_qmicm_mode(const char *name)
+{
+	/* find pm device from list by name */
+	struct mdm_hsic_pm_data *pm_data = get_pm_data_by_dev_name(name);
+
+	if (!pm_data) {
+		pr_err("%s:no pm device(%s) exist\n", __func__, name);
+		return -ENODEV;
+	}
+
+	return pm_data->qmicm_mode;
+}
+
 /* force fatal for debug when HSIC disconnect */
 extern void mdm_force_fatal(void);
 
@@ -711,6 +724,11 @@ static void mdm_hsic_rpm_check(struct work_struct *work)
 
 	if (lpa_handling) {
 		pr_info("ignore resume req, lpa handling\n");
+		return;
+	}
+
+	if (pm_data->block_request) {
+		pr_info("ignore resume req, block_request\n");
 		return;
 	}
 
