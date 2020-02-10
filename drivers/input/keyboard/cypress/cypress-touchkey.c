@@ -2491,11 +2491,17 @@ static ssize_t bln_led_blink_read( struct device *dev, struct device_attribute *
 
 static ssize_t bln_led_blink_write( struct device *dev, struct device_attribute *attr, const char *buf, size_t size )
 {
-	int ret, brightness, delay_on, delay_off;
+	int ret, brightness, delay_on, delay_off, red, green, blue;
 
 	printk(KERN_DEBUG "[TouchKey-BLN] %s: %s\n", __func__, buf);
 	ret = sscanf(buf, "%08x %d %d", &brightness, &delay_on, &delay_off);
 	if (ret != 3) return -EINVAL;
+
+	red   = (brightness >> 16) & 0xFF;
+	green = (brightness >> 8 ) & 0xFF;
+	blue  = (brightness >> 0 ) & 0xFF;
+        brightness = (red + green + blue ) / 3;
+	printk(KERN_DEBUG "[TouchKey-BLN] %s: red:%d green:%d blue:%d => brightness:%d\n", __func__, red, green, blue, brightness);
 
 	bln_led_blink.brightness = brightness;
 	bln_led_blink.delay_on = delay_on;
