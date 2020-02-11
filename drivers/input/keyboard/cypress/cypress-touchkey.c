@@ -2507,6 +2507,11 @@ static ssize_t bln_led_blink_write( struct device *dev, struct device_attribute 
 	bln_led_blink.delay_on = delay_on;
 	bln_led_blink.delay_off = delay_off;
 
+	if (brightness == 0) {
+		printk(KERN_DEBUG "[TouchKey-BLN] %s: Disabling notification\n", __func__);
+		disable_led_notification();
+		bln_ongoing = 0;
+	}
 	return size;
 }
 
