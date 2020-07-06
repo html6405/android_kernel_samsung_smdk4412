@@ -235,10 +235,15 @@ static void mdnie_update(struct mdnie_info *mdnie)
 {
 	struct mdnie_tuning_info *table = NULL;
 
-	if (!mdnie->enable) {
+	bool disabled = !mdnie->enable || mdnie->fb_suspended;
+	if (!mdnie->enable)
 		dev_err(mdnie->dev, "mdnie state is off\n");
+
+	if (mdnie->fb_suspended)
+		dev_err(mdnie->dev, "mdnie state is suspended\n");
+
+	if (disabled)
 		return;
-	}
 
 	table = mdnie_request_table(mdnie);
 	if (!IS_ERR_OR_NULL(table) && !IS_ERR_OR_NULL(table->sequence)) {
@@ -1012,7 +1017,7 @@ static struct device_attribute mdnie_attributes[] = {
 
 #ifdef CONFIG_PM
 #if defined(CONFIG_FB)
-void mdnie_fb_suspend(struct mdnie_info *mdnie)
+static void mdnie_fb_suspend(struct mdnie_info *mdnie)
 {
 	if (mdnie->fb_suspended)
 		return;
@@ -1020,8 +1025,8 @@ void mdnie_fb_suspend(struct mdnie_info *mdnie)
 	mdnie->fb_suspended = true;
 
 	dev_info(mdnie->dev, "+%s\n", __func__);
-	printk("%s: scenario:%d accessibility:%d", __func__, mdnie->scenario, mdnie->accessibility);
 
+	printk("%s: scenario:%d accessibility:%d", __func__, mdnie->scenario, mdnie->accessibility);
 #if defined(CONFIG_FB_MDNIE_PWM)
 	struct lcd_platform_data *pd = mdnie->lcd_pd;
 
@@ -1032,13 +1037,14 @@ void mdnie_fb_suspend(struct mdnie_info *mdnie)
 
 	if (pd && pd->power_on)
 		pd->power_on(NULL, 0);
+
 #endif
 	dev_info(mdnie->dev, "-%s\n", __func__);
 
 	return;
 }
 
-void mdnie_fb_resume(struct mdnie_info *mdnie)
+static void mdnie_fb_resume(struct mdnie_info *mdnie)
 {
 	if (!mdnie->fb_suspended)
 		return;
@@ -1062,7 +1068,6 @@ void mdnie_fb_resume(struct mdnie_info *mdnie)
 
 	mdnie->bd_enable = TRUE;
 #endif
-
 	mdnie_update(mdnie);
 
 	dev_info(mdnie->dev, "-%s\n", __func__);
@@ -1070,7 +1075,7 @@ void mdnie_fb_resume(struct mdnie_info *mdnie)
 	return;
 }
 
-int mdnie_fb_notifier_callback(struct notifier_block *self,
+static int fb_notifier_callback(struct notifier_block *self,
 				unsigned long event, void *data)
 {
 	struct fb_event *evdata = data;
@@ -1088,7 +1093,9 @@ int mdnie_fb_notifier_callback(struct notifier_block *self,
 					break;
 				default:
 				case FB_BLANK_POWERDOWN:
+#ifndef CONFIG_CPU_EXYNOS4210
 					mdnie_fb_suspend(mdnie);
+#endif
 					break;
 			}
 		}
@@ -1175,7 +1182,7 @@ static int mdnie_probe(struct platform_device *pdev)
 
 #ifdef CONFIG_FB
 	mdnie->fb_suspended = false;
-	mdnie->fb_notif.notifier_call = mdnie_fb_notifier_callback;
+	mdnie->fb_notif.notifier_call = fb_notifier_callback;
 	fb_register_client(&mdnie->fb_notif);
 #endif
 
