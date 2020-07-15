@@ -405,6 +405,9 @@ static ssize_t store_##file_name					\
 	if (ret != 1)							\
 		return -EINVAL;						\
 									\
+	if (new_policy.max == 1700000)				\
+		new_policy.max = 1704000;				\
+									\
 	ret = __cpufreq_set_policy(policy, &new_policy);		\
 	policy->user_policy.object = policy->object;			\
 									\
