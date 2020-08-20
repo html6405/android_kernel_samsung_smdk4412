@@ -419,7 +419,7 @@ static void __init set_volt_table(void)
 		break;
 	case SUPPORT_1200MHZ:
 		for_1200 = true;
-		max_support_idx = L2;
+		max_support_idx = L0;
 		break;
 	case SUPPORT_1000MHZ:
 		for_1000 = true;
