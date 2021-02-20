@@ -50,8 +50,8 @@
 #include <linux/leds-an30259a.h>
 #endif
 
-int ac_level 		= AC_CHARGE_LEVEL_DEFAULT;    // Set AC default charge level
-int usb_level  		= USB_CHARGE_LEVEL_DEFAULT; // Set USB default charge level
+int ac_level 		= AC_CHARGE_LEVEL_MAX;    // Set AC default charge level
+int usb_level  		= USB_CHARGE_LEVEL_MAX; // Set USB default charge level
 int wireless_level	= WIRELESS_CHARGE_LEVEL_DEFAULT; // Set wireless default charge level
 char charge_info_text[30];
 int charge_info_level;
