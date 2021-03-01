@@ -14,7 +14,17 @@
  * This should be same with cpufreq_frequency_table
 */
 
+#if defined(CONFIG_CPU_EXYNOS4210)
+
+#if defined(CONFIG_EXYNOS4210_1200MHZ_SUPPORT)
+#define CPUFREQ_LEVEL_END	L14
+#else
+#define CPUFREQ_LEVEL_END	L6
+#endif
+
+#else
 #define CPUFREQ_LEVEL_END	(L15 + 1)
+#endif
 
 enum cpufreq_level_index {
 	L0, L1, L2, L3, L4,
