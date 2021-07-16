@@ -277,7 +277,7 @@ static void sec_set_charging(struct battery_data *battery, int charger_type)
 }
 #endif
 
-static enum alarmtimer_restart battery_event_alarm(struct alarm *alarm, ktime_t now)
+static void sec_battery_alarm(struct alarm *alarm)
 {
 	struct battery_data *battery =
 			container_of(alarm, struct battery_data, alarm);
@@ -285,8 +285,6 @@ static enum alarmtimer_restart battery_event_alarm(struct alarm *alarm, ktime_t 
 	pr_debug("%s : sec_battery_alarm.....\n", __func__);
 	__pm_stay_awake(&battery->work_wake_lock);
 	schedule_work(&battery->battery_work);
-
-	return ALARMTIMER_NORESTART;
 }
 
 static void sec_program_alarm(struct battery_data *battery, int seconds)
@@ -2142,7 +2140,7 @@ static int __devinit sec_bat_probe(struct platform_device *pdev)
 
 	battery->last_poll = ktime_get_boottime();
 	alarm_init(&battery->alarm, ALARM_BOOTTIME,
-		battery_event_alarm);
+		sec_battery_alarm);
 
 	ret = power_supply_register(&pdev->dev, &battery->psy_battery);
 	if (ret) {
