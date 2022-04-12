@@ -235,7 +235,7 @@ unsigned int Boeffla_sound_hook_wm8994_write(unsigned int reg, unsigned int val)
 		}
 
 // Do not touch dac direct at all when P4NOTE
-#ifndef CONFIG_MACH_P4NOTE
+#if !(defined(CONFIG_MACH_P4NOTE) || defined(CONFIG_MACH_KONA))
 		// dac_direct left channel
 		case WM8994_OUTPUT_MIXER_1:
 		{
@@ -530,7 +530,7 @@ bool check_for_call(void)
 bool check_for_headphone(void)
 {
 // different headphone detection for s3 devices and note devices
-#ifndef CONFIG_MACH_P4NOTE
+#if !(defined(CONFIG_MACH_P4NOTE) || defined(CONFIG_MACH_KONA))
 	if( wm8994->micdet[0].jack != NULL )
 	{
 		if ((wm8994->micdet[0].jack->status & SND_JACK_HEADPHONE) ||
@@ -1031,7 +1031,7 @@ static void set_speaker_boost(void)
 static void set_dac_direct(void)
 {
 // do not touch dac direct at all if P4NOTE
-#ifndef CONFIG_MACH_P4NOTE
+#if !(defined(CONFIG_MACH_P4NOTE) || defined(CONFIG_MACH_KONA))
 	unsigned int val;
 
 	// get current values for output mixers 1 and 2 (l + r) from audio hub
@@ -1180,7 +1180,7 @@ static void set_mono_downmix(void)
 	unsigned int val;
 
 // P4Note has stereo speakers, so also allow mono without headphones attached
-#ifndef CONFIG_MACH_P4NOTE 
+#if !(defined(CONFIG_MACH_P4NOTE) || defined(CONFIG_MACH_KONA))
 	if (!is_call && is_headphone && (mono_downmix == ON))
 #else
 	if (!is_call  && (mono_downmix == ON))
@@ -1740,7 +1740,7 @@ static ssize_t dac_direct_show(struct device *dev, struct device_attribute *attr
 {
 // For P4NOTE, dac direct always needs to be enabled, so the setting is
 // returned as blank = setting not active
-#ifndef CONFIG_MACH_P4NOTE
+#if !(defined(CONFIG_MACH_P4NOTE) || defined(CONFIG_MACH_KONA))
 	return sprintf(buf, "DAC direct: %d\n", dac_direct);
 #else
 	return 0;
