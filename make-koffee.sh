@@ -2,12 +2,13 @@
 
 VERSION=0.5
 DEFCONFIG=lineageos_i9300_defconfig
-TOOLCHAIN=/home/chrono/kernel/arm-linux-androideabi-4.9/bin/arm-linux-androideabi-
+TOOLCHAIN=/home/admin/Schreibtisch/Kernel/arm-linux-androideabi-4.9/bin/arm-linux-androideabi-
 KCONFIG=false
 CUST_CONF=no
+BUILD_NUMBER=
 DEVICE=UNKNOWN
 KCONF_REPLACE=false
-KERNEL_NAME="chrono_kernel"
+KERNEL_NAME="html6405_kernel"
 KERNEL_VERSION="r1.0"
 SKIP_MODULES=true
 DONTPACK=false
@@ -15,7 +16,6 @@ USER=$USER
 DATE=`date`
 SOURCE_PATH=`pwd`
 BUILD_PATH=$SOURCE_PATH/../obj/
-BUILD_NUMBER=
 CLEAN=false
 
 
@@ -31,7 +31,7 @@ usage() {
 	echo "Main options:"
 	echo "	-K 			call Kconfig (use only with ready config!)"
 	echo "	-d 			defconfig for the kernel. Will try to use already generated .config if not specified"
-	echo "	-S 			set device codename (m0 for i9300 or t03g for n7100)"
+	echo "	-S 			set device codename (m0 for i9300 or t03g for n7100 or p4noterf for n8000)"
 	echo "	-O <file> 			external/other defconfig."
 	echo "	-t <toolchain_prefix> 			toolchain prefix"
 	echo ""
@@ -117,9 +117,13 @@ make_flashable()
 	else
 		if [ "$DEVICE" == "t03g" ]; then
 			cp -R $SOURCE_PATH/anykernel_boeffla-n7100/* $REPACK_PATH
-		else
-			echo "Attempt to create zip for unknown device. Aborting..."
-			return 0
+	  else
+		  if [ "$DEVICE" == "p4noterf" ]; then
+			  cp -R $SOURCE_PATH/anykernel_boeffla-n8000/* $REPACK_PATH
+		  else
+			  echo "Attempt to create zip for unknown device. Aborting..."
+			  return 0
+			  fi
 		fi
 	fi
 
@@ -152,32 +156,31 @@ make_flashable()
 	fi
 	REVISION=`get_revision`
 	KERNEL_VERSION=`get_tag`
-	BUILD_NUMBER=$(cat $BUILD_PATH/.version)
 	# replace variables in anykernel script
 	cd $REPACK_PATH
-	KERNELNAME="Flashing Chrono kernel ${KERNEL_VERSION}"
+	KERNELNAME="Flashing html6405 kernel"
 	sed -i "s;###kernelname###;${KERNELNAME};" META-INF/com/google/android/update-binary;
 	COPYRIGHT_SCRIPT=$(echo '(c) A\$teroid × Lord Boeffla, 2018')
 	sed -i "s;###copyright_script###;${COPYRIGHT_SCRIPT};" META-INF/com/google/android/update-binary;
-	COPYRIGHT=$(echo '(c) Chrono, 2019')
+	COPYRIGHT=$(echo '(c) html6405, 2022')
 	sed -i "s;###copyright###;${COPYRIGHT};" META-INF/com/google/android/update-binary;
-	BUILDINFO="Build #${BUILD_NUMBER}, $DATE (revision $REVISION)"
+	BUILDINFO="Release ${BUILD_NUMBER}, $DATE (revision $REVISION)"
 	sed -i "s;###buildinfo###;${BUILDINFO};" META-INF/com/google/android/update-binary;
-	SOURCECODE="Source code: https://github.com/ChronoMonochrome/android_kernel_samsung_smdk4412"
+	SOURCECODE="Source code: https://github.com/html6405/android_kernel_samsung_smdk4412"
 	sed -i "s;###sourcecode###;${SOURCECODE};" META-INF/com/google/android/update-binary;
 
 
 	# create zip file
-	zip -r9 ${KERNEL_NAME}_${KERNEL_VERSION}-${BUILD_NUMBER}-${REVISION}.zip * -x ${KERNEL_NAME}_${KERNEL_VERSION}-${BUILD_NUMBER}-${REVISION}.zip
+	zip -r9 ${KERNEL_NAME}_${KERNEL_VERSION}-${REVISION}.zip * -x ${KERNEL_NAME}_${KERNEL_VERSION}-${REVISION}.zip
 
 	# sign recovery zip if there are keys available
 	if [ -f "$SOURCE_PATH/tools_boeffla/testkey.x509.pem" ]; then
-		java -jar $SOURCE_PATH/tools_boeffla/signapk.jar -w $SOURCE_PATH/tools_boeffla/testkey.x509.pem $SOURCE_PATH/tools_boeffla/testkey.pk8 ${KERNEL_NAME}_${KERNEL_VERSION}-${BUILD_NUMBER}-${REVISION}.zip ${KERNEL_NAME}_${KERNEL_VERSION}-${BUILD_NUMBER}-${REVISION}-signed.zip
-		cp ${KERNEL_NAME}_${KERNEL_VERSION}-${BUILD_NUMBER}-${REVISION}-signed.zip $BUILD_PATH/${KERNEL_NAME}_${KERNEL_VERSION}-${BUILD_NUMBER}-${REVISION}-${DEVICE}-signed.zip
-		md5sum $SOURCE_PATH/${KERNEL_NAME}_${KERNEL_VERSION}-${BUILD_NUMBER}-${REVISION}-${DEVICE}-signed.zip > $SOURCE_PATH/${KERNEL_NAME}_${KERNEL_VERSION}-${BUILD_NUMBER}-${REVISION}-${DEVICE}-signed.zip.md5
+		java -jar $SOURCE_PATH/tools_boeffla/signapk.jar -w $SOURCE_PATH/tools_boeffla/testkey.x509.pem $SOURCE_PATH/tools_boeffla/testkey.pk8 ${KERNEL_NAME}_${KERNEL_VERSION}-${REVISION}.zip ${KERNEL_NAME}_${KERNEL_VERSION}-${REVISION}-signed.zip
+		cp ${KERNEL_NAME}_${KERNEL_VERSION}-${REVISION}-signed.zip $BUILD_PATH/${KERNEL_NAME}_${KERNEL_VERSION}-${REVISION}-${DEVICE}-signed.zip
+		md5sum $SOURCE_PATH/${KERNEL_NAME}_${KERNEL_VERSION}-${REVISION}-${DEVICE}-signed.zip > $SOURCE_PATH/${KERNEL_NAME}_${KERNEL_VERSION}-${REVISION}-${DEVICE}-signed.zip.md5
 	else
-		cp ${KERNEL_NAME}_${KERNEL_VERSION}-${BUILD_NUMBER}-${REVISION}.zip $SOURCE_PATH/${KERNEL_NAME}_${KERNEL_VERSION}-${BUILD_NUMBER}-${REVISION}-${DEVICE}.zip
-		md5sum $SOURCE_PATH/${KERNEL_NAME}_${KERNEL_VERSION}-${BUILD_NUMBER}-${REVISION}-${DEVICE}.zip > $SOURCE_PATH/${KERNEL_NAME}_${KERNEL_VERSION}-${BUILD_NUMBER}-${REVISION}-${DEVICE}.zip.md5
+		cp ${KERNEL_NAME}_${KERNEL_VERSION}-${REVISION}.zip $SOURCE_PATH/${KERNEL_NAME}_${KERNEL_VERSION}-${REVISION}-${DEVICE}.zip
+		md5sum $SOURCE_PATH/${KERNEL_NAME}_${KERNEL_VERSION}-${REVISION}-${DEVICE}.zip > $SOURCE_PATH/${KERNEL_NAME}_${KERNEL_VERSION}-${REVISION}-${DEVICE}.zip.md5
 	fi
 
 
@@ -244,6 +247,10 @@ main() {
 		DEVICE="t03g"
 	fi
 
+	if [ "$DEFCONFIG" == "lineageos_n8000_defconfig" ]; then
+		DEVICE="p4noterf"
+	fi
+	
 	if [ -z $TOOLCHAIN ]; then
 		echo "FATAL: No toolchain prefix specified!"
 		echo "*** BUILD FAILED ***"
@@ -322,8 +329,8 @@ main() {
 			echo "| Build  host:	`hostname`"
 			echo "| Build  toolchain:	$TVERSION"
 			echo "| Number of threads:	$THREADS"
-			echo "> Flashable ZIP: $(ls | grep ${KERNEL_NAME}_${KERNEL_VERSION}-${BUILD_NUMBER}-${REVISION}-${DEVICE} | grep .zip | head -n 1)"
-			echo "> MD5sum: $(ls | grep ${KERNEL_NAME}_${KERNEL_VERSION}-${BUILD_NUMBER}-${REVISION}-${DEVICE} | grep .md5)"
+			echo "> Flashable ZIP: $(ls | grep ${KERNEL_NAME}_${KERNEL_VERSION}-${REVISION}-${DEVICE} | grep .zip | head -n 1)"
+			echo "> MD5sum: $(ls | grep ${KERNEL_NAME}_${KERNEL_VERSION}-${REVISION}-${DEVICE} | grep .md5)"
 			echo "--------------------------------------"
 			echo "*** Koffee is ready! ***"
 		else
