@@ -25,7 +25,7 @@
 struct  host_notifier_info {
 	struct host_notifier_platform_data *pdata;
 	struct task_struct *th;
-	struct wake_lock	wlock;
+	struct wakeup_source	wlock;
 	struct delayed_work current_dwork;
 	wait_queue_head_t	delay_wait;
 	int	thread_remove;
@@ -91,7 +91,7 @@ static int start_usbhostd_thread(void)
 			return -1;
 		}
 		host_state_notify(&ninfo.pdata->ndev, NOTIFY_HOST_ADD);
-		wake_lock(&ninfo.wlock);
+		__pm_stay_awake(&ninfo.wlock);
 
 	} else
 		pr_info("host_notifier: usbhostd already started!\n");
@@ -109,7 +109,7 @@ static int stop_usbhostd_thread(void)
 
 		ninfo.th = NULL;
 		host_state_notify(&ninfo.pdata->ndev, NOTIFY_HOST_REMOVE);
-		wake_unlock(&ninfo.wlock);
+		__pm_relax(&ninfo.wlock);
 	} else
 		pr_info("host_notifier: no thread\n");
 
@@ -119,7 +119,7 @@ static int stop_usbhostd_thread(void)
 int start_usbhostd_wakelock(void)
 {
 	pr_info("host_notifier: start usbhostd wakelock\n");
-	wake_lock(&ninfo.wlock);
+	__pm_stay_awake(&ninfo.wlock);
 
 	return 0;
 }
@@ -127,7 +127,7 @@ int start_usbhostd_wakelock(void)
 int stop_usbhostd_wakelock(void)
 {
 	pr_info("host_notifier: stop usbhostd wakelock\n");
-	wake_unlock(&ninfo.wlock);
+	__pm_relax(&ninfo.wlock);
 
 	return 0;
 }
@@ -145,6 +145,7 @@ void host_notifier_disable_irq(void)
 	disable_irq(ninfo.currentlimit_irq);
 }
 #endif
+
 static int start_usbhostd_notify(void)
 {
 	pr_info("host_notifier: start usbhostd notify\n");
@@ -153,7 +154,7 @@ static int start_usbhostd_notify(void)
 #endif
 
 	host_state_notify(&ninfo.pdata->ndev, NOTIFY_HOST_ADD);
-	wake_lock(&ninfo.wlock);
+	__pm_stay_awake(&ninfo.wlock);
 
 	return 0;
 }
@@ -166,7 +167,7 @@ static int stop_usbhostd_notify(void)
 #endif
 
 	host_state_notify(&ninfo.pdata->ndev, NOTIFY_HOST_REMOVE);
-	wake_unlock(&ninfo.wlock);
+	__pm_relax(&ninfo.wlock);
 
 	return 0;
 }
@@ -317,12 +318,7 @@ static int host_notifier_probe(struct platform_device *pdev)
 		dev_err(&pdev->dev, "Failed to host_notify_dev_register\n");
 		return ret;
 	}
-
-#if defined(CONFIG_FAST_BOOT)
-	ninfo.fsd_notifier_block.notifier_call = fsd_host_notifier_call;
-	register_fake_shut_down_notifier(&ninfo.fsd_notifier_block);
-#endif
-	wake_lock_init(&ninfo.wlock, WAKE_LOCK_SUSPEND, "hostd");
+	wakeup_source_init(&ninfo.wlock, "hostd");
 
 	return 0;
 }
@@ -334,7 +330,7 @@ static int host_notifier_remove(struct platform_device *pdev)
 #endif
 	/* gpio_free(ninfo.pdata->gpio); */
 	host_notify_dev_unregister(&ninfo.pdata->ndev);
-	wake_lock_destroy(&ninfo.wlock);
+	wakeup_source_trash(&ninfo.wlock);
 	return 0;
 }
 
