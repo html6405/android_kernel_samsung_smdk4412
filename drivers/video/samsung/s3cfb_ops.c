@@ -1098,10 +1098,7 @@ int s3cfb_blank(int blank_mode, struct fb_info *fb)
 	return 0;
 }
 
-extern int check_bootmode(void);
-extern int s6e8ax0_suspended;
-extern int s6e8ax0_fix_fence;
-
+extern unsigned int poweroff_charging;
 int s3cfb_pan_display(struct fb_var_screeninfo *var, struct fb_info *fb)
 {
 	struct s3cfb_window *win = fb->par;
@@ -1121,7 +1118,7 @@ int s3cfb_pan_display(struct fb_var_screeninfo *var, struct fb_info *fb)
 #endif
 
 #if defined(CONFIG_MACH_KONA) || defined(CONFIG_MACH_TAB3) || defined(CONFIG_MACH_T0) || defined(CONFIG_MACH_M0)
-	if (s6e8ax0_fix_fence || poweroff_charging) {
+	if (poweroff_charging) {
 		/* support LPM (off charging mode) display based on FBIOPAN_DISPLAY */
 		s3cfb_check_var(var, fb);
 		s3cfb_set_par(fb);
