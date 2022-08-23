@@ -2050,7 +2050,7 @@ static int __devinit max77693_muic_probe(struct platform_device *pdev)
 	info->is_otg_test = false;
 	info->is_factory_start = false;
 
-	wakeup_source_init(&info->muic_wake_lock, WAKE_LOCK_SUSPEND,
+	wakeup_source_init(&info->muic_wake_lock,
 		"muic wake lock");
 
 	info->cable_type = CABLE_TYPE_UNKNOWN_MUIC;
