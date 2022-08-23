@@ -107,7 +107,7 @@ struct max77693_muic_info {
 #endif /* CONFIG_MUIC_MAX77693_SUPPORT_MHL_CABLE_DETECTION */
 	int			mansw;
 
-	struct wake_lock muic_wake_lock;
+	struct wakeup_source muic_wake_lock;
 
 	enum cable_type_muic	cable_type;
 
@@ -1738,7 +1738,7 @@ static void max77693_muic_detect_dev(struct max77693_muic_info *info, int irq)
 	dev_info(info->dev, "%s: STATUS1:0x%x, 2:0x%x\n", __func__,
 		 status[0], status[1]);
 
-	wake_lock_timeout(&info->muic_wake_lock, HZ * 2);
+	__pm_wakeup_event(&info->muic_wake_lock, HZ * 2);
 
 	intr = max77693_muic_filter_dev(info, status[0], status[1]);
 
@@ -2050,7 +2050,7 @@ static int __devinit max77693_muic_probe(struct platform_device *pdev)
 	info->is_otg_test = false;
 	info->is_factory_start = false;
 
-	wake_lock_init(&info->muic_wake_lock, WAKE_LOCK_SUSPEND,
+	wakeup_source_init(&info->muic_wake_lock, WAKE_LOCK_SUSPEND,
 		"muic wake lock");
 
 	info->cable_type = CABLE_TYPE_UNKNOWN_MUIC;
@@ -2141,7 +2141,7 @@ static int __devinit max77693_muic_probe(struct platform_device *pdev)
 #endif /* CONFIG_MUIC_MAX77693_SUPPORT_MHL_CABLE_DETECTION */
 	mutex_destroy(&info->mutex);
 	platform_set_drvdata(pdev, NULL);
-	wake_lock_destroy(&info->muic_wake_lock);
+	wakeup_source_trash(&info->muic_wake_lock);
  err_kfree:
 	kfree(info);
  err_return:
@@ -2166,7 +2166,7 @@ static int __devexit max77693_muic_remove(struct platform_device *pdev)
 #if defined(CONFIG_MUIC_MAX77693_SUPPORT_MHL_CABLE_DETECTION)
 		free_irq(info->irq_adc1k, info);
 #endif /* CONFIG_MUIC_MAX77693_SUPPORT_MHL_CABLE_DETECTION */
-		wake_lock_destroy(&info->muic_wake_lock);
+		wakeup_source_trash(&info->muic_wake_lock);
 		mutex_destroy(&info->mutex);
 		kfree(info);
 	}
