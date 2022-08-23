@@ -119,7 +119,7 @@ struct max77693_muic_info {
 	int			mansw;
 	bool			is_default_uart_path_cp;
 
-	struct wake_lock muic_wake_lock;
+	struct wakeup_source muic_wake_lock;
 
 	enum cable_type_muic	cable_type;
 
@@ -2771,7 +2771,7 @@ static void max77693_muic_detect_dev(struct max77693_muic_info *info, int irq)
 	dev_info(info->dev, "%s: STATUS1:0x%x, 2:0x%x\n", __func__,
 		 status[0], status[1]);
 
-	wake_lock_timeout(&info->muic_wake_lock, HZ * 2);
+	__pm_wakeup_event(&info->muic_wake_lock, HZ * 2);
 
 	intr = max77693_muic_filter_dev(info, status[0], status[1]);
 
@@ -3311,7 +3311,7 @@ static int __devinit max77693_muic_probe(struct platform_device *pdev)
 	info->is_factory_start = false;
 #endif /* !CONFIG_MUIC_MAX77693_SUPPORT_CAR_DOCK */
 
-	wake_lock_init(&info->muic_wake_lock, WAKE_LOCK_SUSPEND,
+	wakeup_source_init(&info->muic_wake_lock,
 		"muic wake lock");
 
 	if (pdata->is_default_uart_path_cp)
@@ -3430,7 +3430,7 @@ static int __devinit max77693_muic_probe(struct platform_device *pdev)
 	mutex_destroy(&info->mutex);
  err_input:
 	platform_set_drvdata(pdev, NULL);
-	wake_lock_destroy(&info->muic_wake_lock);
+	wakeup_source_trash(&info->muic_wake_lock);
  err_kfree:
 	kfree(info);
  err_return:
@@ -3459,7 +3459,7 @@ static int __devexit max77693_muic_remove(struct platform_device *pdev)
 
 		max77693_muic_free_irqs(info);
 
-		wake_lock_destroy(&info->muic_wake_lock);
+		wakeup_source_trash(&info->muic_wake_lock);
 		mutex_destroy(&info->mutex);
 		kfree(info);
 	}
