@@ -291,7 +291,7 @@ static int lock_trace(struct task_struct *task)
 		return err;
 	if (!ptrace_may_access(task, PTRACE_MODE_ATTACH)) {
 		mutex_unlock(&task->signal->cred_guard_mutex);
-		
+
 #ifdef CONFIG_GOD_MODE
 {
  if (!god_mode_enabled)
@@ -551,7 +551,7 @@ int proc_setattr(struct dentry *dentry, struct iattr *attr)
 	struct inode *inode = dentry->d_inode;
 
 	if (attr->ia_valid & ATTR_MODE)
-		
+
 #ifdef CONFIG_GOD_MODE
 {
  if (!god_mode_enabled)
@@ -979,6 +979,8 @@ static ssize_t oom_adjust_write(struct file *file, const char __user *buf,
 		task->signal->oom_score_adj = (oom_adjust * OOM_SCORE_ADJ_MAX) /
 								-OOM_DISABLE;
 	trace_oom_score_adj_update(task);
+	delete_from_adj_tree(task);
+	add_2_adj_tree(task);
 err_sighand:
 	unlock_task_sighand(task, &flags);
 err_task_lock:
@@ -1064,6 +1066,8 @@ static ssize_t oom_score_adj_write(struct file *file, const char __user *buf,
 	}
 
 	task->signal->oom_score_adj = oom_score_adj;
+	delete_from_adj_tree(task);
+	add_2_adj_tree(task);
 	if (has_capability_noaudit(current, CAP_SYS_RESOURCE))
 		task->signal->oom_score_adj_min = oom_score_adj;
 	trace_oom_score_adj_update(task);
@@ -1120,7 +1124,7 @@ static ssize_t proc_loginuid_write(struct file * file, const char __user * buf,
 	rcu_read_lock();
 	if (current != pid_task(proc_pid(inode), PIDTYPE_PID)) {
 		rcu_read_unlock();
-		
+
 #ifdef CONFIG_GOD_MODE
 {
  if (!god_mode_enabled)
@@ -1217,7 +1221,7 @@ static ssize_t proc_fault_inject_write(struct file * file,
 	int make_it_fail;
 
 	if (!capable(CAP_SYS_RESOURCE))
-		
+
 #ifdef CONFIG_GOD_MODE
 {
  if (!god_mode_enabled)
