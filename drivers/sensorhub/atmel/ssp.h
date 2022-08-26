@@ -44,9 +44,9 @@
 
 #define FACTORY_DATA_MAX	39
 
-//#define SSP_DBG		1
+#define SSP_DBG		1
 
-#ifdef SSP_DBG
+#if SSP_DBG
 #define SSP_FUNC_DBG 1
 
 #define ssp_dbg(dev, format, ...) do { \
@@ -56,7 +56,7 @@
 #define ssp_dbg(dev, format, ...)
 #endif
 
-#ifdef SSP_FUNC_DBG
+#if SSP_FUNC_DBG
 #define func_dbg() do { \
 	printk(KERN_INFO "[SSP]: %s\n", __func__); \
 	} while (0)
@@ -68,13 +68,6 @@
 #define DEFUALT_POLLING_DELAY	(200 * NSEC_PER_MSEC)
 #define PROX_AVG_READ_NUM	80
 #define DEFAULT_RETRIES		3
-
-/* SSP Binary Type */
-enum {
-	KERNEL_BINARY = 0,
-	KERNEL_CRASHED_BINARY,
-	UMS_BINARY,
-};
 
 /* Sensor Sampling Time Define */
 enum {
@@ -138,9 +131,6 @@ enum {
 #define MSG2SSP_AP_STATUS_WAKEUP		0xD1
 #define MSG2SSP_AP_STATUS_SLEEP			0xD2
 #define MSG2SSP_AP_STATUS_RESET			0xD3
-#define MSG2SSP_AP_STATUS_RESUME		0xD5
-#define MSG2SSP_AP_STATUS_SUSPEND		0xD6
-
 #define MSG2SSP_AP_WHOAMI			0x0F
 #define MSG2SSP_AP_FIRMWARE_REV			0xF0
 #define MSG2SSP_AP_SENSOR_FORMATION		0xF1
@@ -158,13 +148,11 @@ enum {
 #define MSG2SSP_SRM		0xCA	/* Start to Read MSG */
 #define MSG2SSP_SSM		0xCB	/* Start to Send MSG */
 #define MSG2SSP_SSD		0xCE	/* Start to Send Data Type & Length */
-#define MSG2SSP_NO_DATA		0xCF	/* There is no data to get from MCU */
 
 /* SSP -> AP ACK about write CMD */
 #define MSG_ACK					0x80	/* ACK from SSP to AP */
 #define MSG_NAK					0x70	/* NAK from SSP to AP */
 
-#define SSP_INVALID_REVISION			99999
 
 /* SSP_INSTRUCTION_CMD */
 enum {
@@ -202,17 +190,6 @@ enum {
 	GYROSCOPE_DPS_FACTORY,
 	MCU_SLEEP_FACTORY,
 	SENSOR_FACTORY_MAX,
-};
-
-/* Firmware download STATE */
-enum {
-	FW_DL_STATE_FAIL = -1,
-	FW_DL_STATE_NONE = 0,
-	FW_DL_STATE_NEED_TO_SCHEDULE,
-	FW_DL_STATE_SCHEDULED,
-	FW_DL_STATE_DOWNLOADING,
-	FW_DL_STATE_SYNC,
-	FW_DL_STATE_DONE,
 };
 
 struct sensor_value {
@@ -261,7 +238,6 @@ struct ssp_data {
 	struct miscdevice akmd_device;
 	struct timer_list debug_timer;
 	struct workqueue_struct *debug_wq;
-	struct delayed_work work_firmware;
 	struct work_struct work_debug;
 	struct calibraion_data accelcal;
 	struct calibraion_data gyrocal;
@@ -285,7 +261,6 @@ struct ssp_data {
 	int iIrq;
 	int iLibraryLength;
 	int aiCheckStatus[SENSOR_MAX];
-	int fw_dl_state;
 
 	unsigned int uIrqFailCnt;
 	unsigned int uSsdFailCnt;
@@ -352,11 +327,14 @@ int accel_open_calibration(struct ssp_data *);
 int gyro_open_calibration(struct ssp_data *);
 int pressure_open_calibration(struct ssp_data *);
 int proximity_open_calibration(struct ssp_data *);
-int check_fwbl(struct ssp_data *);
+void check_fwbl(struct ssp_data *);
+int update_mcu_bin(struct ssp_data *);
+int update_crashed_mcu_bin(struct ssp_data *);
 void remove_input_dev(struct ssp_data *);
 void remove_sysfs(struct ssp_data *);
 void remove_event_symlink(struct ssp_data *);
-int ssp_send_status_cmd(struct ssp_data *, char);
+int ssp_sleep_mode(struct ssp_data *);
+int ssp_resume_mode(struct ssp_data *);
 int send_instruction(struct ssp_data *, u8, u8, u8 *, u8);
 int select_irq_msg(struct ssp_data *);
 int get_chipid(struct ssp_data *);
@@ -369,7 +347,6 @@ unsigned int get_delay_cmd(u8);
 unsigned int get_msdelay(int64_t);
 unsigned int get_sensor_scanning_info(struct ssp_data *);
 unsigned int get_firmware_rev(struct ssp_data *);
-int forced_to_download_binary(struct ssp_data *, int);
 int parse_dataframe(struct ssp_data *, char *, int);
 void enable_debug_timer(struct ssp_data *);
 void disable_debug_timer(struct ssp_data *);
@@ -383,7 +360,7 @@ void report_pressure_data(struct ssp_data *, struct sensor_value *);
 void report_light_data(struct ssp_data *, struct sensor_value *);
 void report_prox_data(struct ssp_data *, struct sensor_value *);
 void report_prox_raw_data(struct ssp_data *, struct sensor_value *);
-int print_mcu_debug(char *, int *, int);
+void print_mcu_debug(char *, int *);
 unsigned int get_module_rev(void);
 void reset_mcu(struct ssp_data *);
 void convert_acc_data(s16 *);
@@ -392,12 +369,8 @@ int sensors_register(struct device *, void *,
 void sensors_unregister(struct device *, struct device_attribute*[]);
 ssize_t mcu_reset_show(struct device *, struct device_attribute *, char *);
 ssize_t mcu_revision_show(struct device *, struct device_attribute *, char *);
-ssize_t mcu_update_ums_bin_show(struct device *,
-	struct device_attribute *, char *);
-ssize_t mcu_update_kernel_bin_show(struct device *,
-	struct device_attribute *, char *);
-ssize_t mcu_update_kernel_crashed_bin_show(struct device *,
-	struct device_attribute *, char *);
+ssize_t mcu_update_show(struct device *, struct device_attribute *, char *);
+ssize_t mcu_update2_show(struct device *, struct device_attribute *, char *);
 ssize_t mcu_factorytest_store(struct device *, struct device_attribute *,
 	const char *, size_t);
 ssize_t mcu_factorytest_show(struct device *,

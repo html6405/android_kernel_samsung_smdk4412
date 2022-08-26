@@ -21,17 +21,6 @@ config SENSORS_SSP
 	  To compile this driver as a module, choose M here: the
 	  module will be called ssp.
 
-config SENSORS_SSP_ATMEL
-	tristate "Sensors ssp atmel"
-	default n
-	depends on I2C
-	help
-	  ssp driver for sensor hub.
-          If you say yes here you get ssp support for
-	  sensor hub.
-	  To compile this driver as a module, choose M here: the
-	  module will be called ssp.
-
 config SENSORS_SSP_LSM330
 	tristate "Sensors ssp lsm330"
 	default n

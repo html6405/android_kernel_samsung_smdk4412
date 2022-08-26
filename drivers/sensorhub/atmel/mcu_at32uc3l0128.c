@@ -18,14 +18,14 @@
 /* factory Sysfs                                                         */
 /*************************************************************************/
 
-#define MODEL_NAME		"AT32UC3L0128"
+#define MODEL_NAME			"AT32UC3L0128"
 
 ssize_t mcu_revision_show(struct device *dev,
 	struct device_attribute *attr, char *buf)
 {
 	struct ssp_data *data = dev_get_drvdata(dev);
 
-	return sprintf(buf, "AT0112%u,AT0112%u\n", get_module_rev(),
+	return sprintf(buf, "AT01120%u,AT01120%u\n", get_module_rev(),
 		data->uCurFirmRev);
 }
 
@@ -35,7 +35,7 @@ ssize_t mcu_model_name_show(struct device *dev,
 	return sprintf(buf, "%s\n", MODEL_NAME);
 }
 
-ssize_t mcu_update_kernel_bin_show(struct device *dev,
+ssize_t mcu_update_show(struct device *dev,
 	struct device_attribute *attr, char *buf)
 {
 	bool bSuccess = false;
@@ -44,22 +44,39 @@ ssize_t mcu_update_kernel_bin_show(struct device *dev,
 
 	ssp_dbg("[SSP]: %s - mcu binany update!\n", __func__);
 
-	iRet = forced_to_download_binary(data, UMS_BINARY);
-	if (iRet == SUCCESS) {
-		bSuccess = true;
-		goto out;
+	if (data->bSspShutdown == false) {
+		disable_irq(data->iIrq);
+		disable_irq_wake(data->iIrq);
+		data->bSspShutdown = true;
 	}
 
-	iRet = forced_to_download_binary(data, KERNEL_BINARY);
-	if (iRet == SUCCESS)
-		bSuccess = true;
-	else
-		bSuccess = false;
-out:
+	iRet = update_mcu_bin(data);
+	if (iRet < 0) {
+		ssp_dbg("[SSP]: %s - update_mcu_bin failed!\n", __func__);
+		goto exit;
+	}
+
+	iRet = initialize_mcu(data);
+	if (iRet < 0) {
+		ssp_dbg("[SSP]: %s - initialize_mcu failed!\n", __func__);
+		goto exit;
+	}
+
+	sync_sensor_state(data);
+
+	enable_irq(data->iIrq);
+	enable_irq_wake(data->iIrq);
+
+#ifdef CONFIG_SENSORS_SSP_SENSORHUB
+	ssp_report_sensorhub_notice(data, MSG2SSP_AP_STATUS_RESET);
+#endif
+
+	bSuccess = true;
+exit:
 	return sprintf(buf, "%s\n", (bSuccess ? "OK" : "NG"));
 }
 
-ssize_t mcu_update_kernel_crashed_bin_show(struct device *dev,
+ssize_t mcu_update2_show(struct device *dev,
 	struct device_attribute *attr, char *buf)
 {
 	bool bSuccess = false;
@@ -68,36 +85,35 @@ ssize_t mcu_update_kernel_crashed_bin_show(struct device *dev,
 
 	ssp_dbg("[SSP]: %s - mcu binany update!\n", __func__);
 
-	iRet = forced_to_download_binary(data, UMS_BINARY);
-	if (iRet == SUCCESS) {
-		bSuccess = true;
-		goto out;
+	if (data->bSspShutdown == false) {
+		disable_irq(data->iIrq);
+		disable_irq_wake(data->iIrq);
+		data->bSspShutdown = true;
 	}
 
-	iRet = forced_to_download_binary(data, KERNEL_CRASHED_BINARY);
-	if (iRet == SUCCESS)
-		bSuccess = true;
-	else
-		bSuccess = false;
-out:
-	return sprintf(buf, "%s\n", (bSuccess ? "OK" : "NG"));
-}
+	iRet = update_crashed_mcu_bin(data);
+	if (iRet < 0) {
+		ssp_dbg("[SSP]: %s - update_mcu_bin failed!\n", __func__);
+		goto exit;
+	}
 
-ssize_t mcu_update_ums_bin_show(struct device *dev,
-	struct device_attribute *attr, char *buf)
-{
-	bool bSuccess = false;
-	int iRet = 0;
-	struct ssp_data *data = dev_get_drvdata(dev);
+	iRet = initialize_mcu(data);
+	if (iRet < 0) {
+		ssp_dbg("[SSP]: %s - initialize_mcu failed!\n", __func__);
+		goto exit;
+	}
 
-	ssp_dbg("[SSP]: %s - mcu binany update!\n", __func__);
+	sync_sensor_state(data);
 
-	iRet = forced_to_download_binary(data, UMS_BINARY);
-	if (iRet == SUCCESS)
-		bSuccess = true;
-	else
-		bSuccess = false;
+	enable_irq(data->iIrq);
+	enable_irq_wake(data->iIrq);
 
+#ifdef CONFIG_SENSORS_SSP_SENSORHUB
+	ssp_report_sensorhub_notice(data, MSG2SSP_AP_STATUS_RESET);
+#endif
+
+	bSuccess = true;
+exit:
 	return sprintf(buf, "%s\n", (bSuccess ? "OK" : "NG"));
 }
 
@@ -214,6 +230,7 @@ ssize_t mcu_sleep_factorytest_show(struct device *dev,
 
 	for (iDataIdx = 0; iDataIdx < FACTORY_DATA_MAX;) {
 		iSensorData = (int)data->uFactorydata[iDataIdx++];
+
 		if ((iSensorData < 0) ||
 			(iSensorData >= (SENSOR_MAX - 1))) {
 			pr_err("[SSP]: %s - Mcu data frame error %d\n",

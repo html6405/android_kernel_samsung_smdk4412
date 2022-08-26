@@ -26,49 +26,37 @@
 /* SSP Debug timer function                                              */
 /*************************************************************************/
 
-int print_mcu_debug(char *pchRcvDataFrame, int *pDataIdx,
-			int iRcvDataFrameLength)
+void print_mcu_debug(char *pchRcvDataFrame, int *pDataIdx)
 {
-	int iLength = pchRcvDataFrame[0];
+	int iLength;
 
-	if (iLength >= iRcvDataFrameLength - *pDataIdx - 1 || iLength <= 0) {
-		ssp_dbg("[SSP]: MSG From MCU - invalid debug length(%d/%d)\n",
-			iLength, iRcvDataFrameLength);
-		return iLength ? iLength : ERROR;
-	}
-
+	iLength = pchRcvDataFrame[0];
 	pchRcvDataFrame[iLength] = 0;
-	*pDataIdx += iLength + 2;
-	ssp_dbg("[SSP]: MSG From MCU - %s\n", pchRcvDataFrame + 1);
+	*pDataIdx = *pDataIdx + iLength + 2;
 
-	return 0;
+	ssp_dbg("[SSP]: MSG From MCU - %s\n", pchRcvDataFrame + 1);
 }
 
 void reset_mcu(struct ssp_data *data)
 {
-	if (data->bSspShutdown == false) {
-		data->bSspShutdown = true;
-		disable_irq_wake(data->iIrq);
-		disable_irq(data->iIrq);
-	}
+	data->bSspShutdown = true;
+	disable_irq(data->iIrq);
+	disable_irq_wake(data->iIrq);
 
 	toggle_mcu_reset(data);
 	msleep(SSP_SW_RESET_TIME);
 	data->bSspShutdown = false;
 
 	if (initialize_mcu(data) < 0)
-		return;
-
-	if (data->bSspShutdown == true) {
-		data->bSspShutdown = false;
-		enable_irq(data->iIrq);
-		enable_irq_wake(data->iIrq);
-	}
+		data->bSspShutdown = true;
 
 	sync_sensor_state(data);
 
+	enable_irq(data->iIrq);
+	enable_irq_wake(data->iIrq);
+
 #ifdef CONFIG_SENSORS_SSP_SENSORHUB
-	ssp_sensorhub_report_notice(data, MSG2SSP_AP_STATUS_RESET);
+	ssp_report_sensorhub_notice(data, MSG2SSP_AP_STATUS_RESET);
 #endif
 }
 
@@ -146,37 +134,21 @@ static void debug_work_func(struct work_struct *work)
 		if (atomic_read(&data->aSensorEnable) & (1 << uSensorCnt))
 			print_sensordata(data, uSensorCnt);
 
-	if (data->fw_dl_state >= FW_DL_STATE_DOWNLOADING &&
-		data->fw_dl_state < FW_DL_STATE_DONE) {
-		pr_info("[SSP] : %s firmware downloading state = %d\n",
-			__func__, data->fw_dl_state);
-		return;
-	} else if (data->fw_dl_state == FW_DL_STATE_FAIL) {
-		pr_err("[SSP] : %s firmware download failed = %d\n",
-			__func__, data->fw_dl_state);
-		return;
-	}
-
 	if ((atomic_read(&data->aSensorEnable) & 0x4f) && (data->uIrqCnt == 0))
 		data->uIrqFailCnt++;
 	else
 		data->uIrqFailCnt = 0;
 
-	if (((data->uSsdFailCnt >= LIMIT_SSD_FAIL_CNT)
+	if ((data->uSsdFailCnt >= LIMIT_SSD_FAIL_CNT)
 		|| (data->uInstFailCnt >= LIMIT_INSTRUCTION_FAIL_CNT)
 		|| (data->uIrqFailCnt >= LIMIT_IRQ_FAIL_CNT)
-		|| ((data->uTimeOutCnt + data->uBusyCnt) > LIMIT_TIMEOUT_CNT))
-		&& (data->bSspShutdown == false)) {
+		|| ((data->uTimeOutCnt + data->uBusyCnt) > LIMIT_TIMEOUT_CNT)) {
 
 		if (data->uResetCnt < LIMIT_RESET_CNT) {
 			reset_mcu(data);
 			data->uResetCnt++;
 		} else {
-			if (data->bSspShutdown == false) {
-				data->bSspShutdown = true;
-				disable_irq_wake(data->iIrq);
-				disable_irq(data->iIrq);
-			}
+			data->bSspShutdown = true;
 		}
 
 		data->uSsdFailCnt = 0;
