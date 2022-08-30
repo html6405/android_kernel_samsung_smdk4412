@@ -1575,7 +1575,6 @@ void s6e8ax0_fb_suspend(void)
 void s6e8ax0_fb_resume(void)
 {
 	struct lcd_info *lcd = g_lcd;
-	s6e8ax0_suspended = 0;
 
 	if (!lcd->fb_suspended)
 		return;
@@ -1747,10 +1746,6 @@ static int s6e8ax0_probe(struct device *dev)
 		dev_err(&lcd->ld->dev, "failed to add sysfs entries, %d\n", __LINE__);
 
 	ret = device_create_file(&lcd->bd->dev, &dev_attr_auto_brightness);
-	if (ret < 0)
-		dev_err(&lcd->ld->dev, "failed to add sysfs entries, %d\n", __LINE__);
-
-	ret = device_create_file(&lcd->bd->dev, &dev_attr_brightness_config);
 	if (ret < 0)
 		dev_err(&lcd->ld->dev, "failed to add sysfs entries, %d\n", __LINE__);
 
