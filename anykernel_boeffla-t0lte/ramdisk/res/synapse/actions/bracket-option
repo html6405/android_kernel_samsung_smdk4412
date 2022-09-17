@@ -1,0 +1,7 @@
+# generic [path] [value]
+if [[ -e "$1" ]]; then
+	if [[ ! -z "$2" ]]; then
+		echo "$2" > "$1"; fi
+	cat "$1" | cut -f2 -d'[' | cut -f1 -d']'
+else # avoid errors
+	echo "0"; fi

@@ -31,7 +31,7 @@ usage() {
 	echo "Main options:"
 	echo "	-K 			call Kconfig (use only with ready config!)"
 	echo "	-d 			defconfig for the kernel. Will try to use already generated .config if not specified"
-	echo "	-S 			set device codename (m0 for i9300 or t03g for n7100 or p4noterf for n8000)"
+	echo "	-S 			set device codename (m0 for i9300 or t03g, for n7100, p4noterf for n8000, or t0lte for n7105)"
 	echo "	-O <file> 			external/other defconfig."
 	echo "	-t <toolchain_prefix> 			toolchain prefix"
 	echo ""
@@ -114,18 +114,20 @@ make_flashable()
 	# copy anykernel template over
 	if [ "$DEVICE" == "m0" ]; then
 		cp -R $SOURCE_PATH/anykernel_boeffla-i9300/* $REPACK_PATH
-	else
-		if [ "$DEVICE" == "t03g" ]; then
-			cp -R $SOURCE_PATH/anykernel_boeffla-n7100/* $REPACK_PATH
-	  else
-		  if [ "$DEVICE" == "p4noterf" ]; then
-			  cp -R $SOURCE_PATH/anykernel_boeffla-n8000/* $REPACK_PATH
-		  else
-			  echo "Attempt to create zip for unknown device. Aborting..."
-			  return 0
-			  fi
-		fi
+	fi	
+	if [ "$DEVICE" == "t03g" ]; then
+		cp -R $SOURCE_PATH/anykernel_boeffla-n7100/* $REPACK_PATH
 	fi
+	if [ "$DEVICE" == "p4noterf" ]; then
+		cp -R $SOURCE_PATH/anykernel_boeffla-n8000/* $REPACK_PATH
+	fi	
+	if [ "$DEVICE" == "t0lte" ]; then
+		cp -R $SOURCE_PATH/anykernel_boeffla-t0lte/* $REPACK_PATH
+	else		  
+		echo "Attempt to create zip for unknown device. Aborting..."
+		return 0
+	fi	
+		
 
 	cd $REPACK_PATH
 	# delete placeholder files
@@ -249,6 +251,10 @@ main() {
 
 	if [ "$DEFCONFIG" == "lineageos_n8000_defconfig" ]; then
 		DEVICE="p4noterf"
+	fi
+	
+	if [ "$DEFCONFIG" == "lineageos_t0lte_defconfig" ]; then
+		DEVICE="t0lte"
 	fi
 	
 	if [ -z $TOOLCHAIN ]; then
