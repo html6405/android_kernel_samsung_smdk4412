@@ -272,7 +272,7 @@ int platform_device_add(struct platform_device *pdev)
 				p = &ioport_resource;
 		}
 
-		if (p && insert_resource(p, r)) {
+		if (p && insert_resource(p, r) && strcmp(pdev->name,"mdm_hsic_pm0") && strcmp(pdev->name, "mdm2_modem")) {
 			printk(KERN_ERR
 			       "%s: failed to claim resource %d\n",
 			       dev_name(&pdev->dev), i);
