@@ -52,7 +52,7 @@
 #else
 #define SEND_KEY_CHECK_TIME_MS	40		/* 40ms */
 #endif
-#define WAKE_LOCK_TIME		(HZ * 5)	/* 5 sec */
+#define WAKE_LOCK_TIME		5000	/* 5 sec */
 #define EAR_CHECK_LOOP_CNT	10
 
 #if defined(CONFIG_MACH_PX) || defined(CONFIG_MACH_P4NOTE) \
