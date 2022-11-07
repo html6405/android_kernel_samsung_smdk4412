@@ -7,20 +7,6 @@ static void sec_keyboard_tx(struct sec_keyboard_drvdata *data, u8 cmd)
 		serio_write(data->serio, cmd);
 }
 
-static void sec_keyboard_power(struct work_struct *work)
-{
-	struct sec_keyboard_drvdata *data = container_of(work,
-			struct sec_keyboard_drvdata, power_dwork.work);
-
-	if (UNKOWN_KEYLAYOUT == data->kl) {
-		data->acc_power(1, false);
-		data->pre_connected = false;
-
-		if (data->check_uart_path)
-			data->check_uart_path(false);
-	}
-}
-
 static void forced_wakeup(struct sec_keyboard_drvdata *data)
 {
 	input_report_key(data->input_dev,
@@ -28,6 +14,21 @@ static void forced_wakeup(struct sec_keyboard_drvdata *data)
 	input_report_key(data->input_dev,
 		KEY_WAKEUP, 0);
 	input_sync(data->input_dev);
+}
+
+static void sec_keyboard_power(struct work_struct *work)
+{
+	struct sec_keyboard_drvdata *data = container_of(work,
+			struct sec_keyboard_drvdata, power_dwork.work);
+
+	if (UNKOWN_KEYLAYOUT == data->kl) {
+		data->acc_power(1, false);
+		forced_wakeup(data);
+		data->pre_connected = false;
+
+		if (data->check_uart_path)
+			data->check_uart_path(false);
+	}
 }
 
 static void sec_keyboard_remapkey(struct work_struct *work)
@@ -202,6 +203,7 @@ static int check_keyboard_dock(struct sec_keyboard_callbacks *cb, bool val)
 		data->univ_kbd_dock = false;
 	} else {
 		cancel_delayed_work_sync(&data->power_dwork);
+		forced_wakeup(data);
 		/* wakeup by keyboard dock */
 		if (data->pre_connected) {
 			if (UNKOWN_KEYLAYOUT != data->pre_kl) {
