@@ -3104,7 +3104,7 @@ static int may_init_module(void)
    zero, and we rely on this for optional sections. */
 static int load_module(struct load_info *info, const char __user *uargs)
 {
-	struct module *mod, *old;
+	struct module *mod;
 	long err;
 
 	err = module_sig_check(info);
