@@ -421,7 +421,7 @@ static irqreturn_t sec_TA_nCHG_interrupt_handler(int irq, void *arg)
 	cancel_delayed_work(&battery->fullcharging_work);
 	schedule_delayed_work(&battery->fullcharging_work,
 			msecs_to_jiffies(300));
-	__pm_wakeup_event(&battery->fullcharge_wake_lock, HZ * 30);
+	__pm_wakeup_event(&battery->fullcharge_wake_lock, 30000);
 
 
 	return IRQ_HANDLED;
@@ -436,7 +436,7 @@ static irqreturn_t sec_TA_nCon_interrupt_handler(int irq, void *arg)
 	disable_irq_nosync(irq);
 	cancel_delayed_work(&battery->TA_work);
 	queue_delayed_work(battery->sec_TA_workqueue, &battery->TA_work, 10);
-	__pm_wakeup_event(&battery->cable_wake_lock, HZ * 2);
+	__pm_wakeup_event(&battery->cable_wake_lock, 2000);
 
 	return IRQ_HANDLED;
 }
@@ -1539,7 +1539,7 @@ static ssize_t sec_batt_test_store(struct device *dev,
 			__pm_stay_awake(&debug_batterydata->wake_lock_for_dev);
 		else
 			__pm_wakeup_event(&debug_batterydata->wake_lock_for_dev,
-					HZ / 2);
+					500);
 		ret = count;
 		break;
 
@@ -1615,10 +1615,10 @@ static int sec_cable_status_update(struct battery_data *battery, int status)
 		if (!get_charger_status(battery)) {
 			if (battery->charging_mode_booting)
 				__pm_wakeup_event(&battery->vbus_wake_lock,
-						5 * HZ);
+						5000);
 			else
 				__pm_wakeup_event(&battery->vbus_wake_lock,
-						HZ / 2);
+						500);
 		}
 	}
 
@@ -1847,7 +1847,7 @@ void fuelgauge_recovery_handler(struct work_struct *work)
 		pr_err("%s: Reduce the Reported SOC by 1 unit, wait for 30s\n",
 								__func__);
 		if (!battery->info.charging_enabled)
-			__pm_wakeup_event(&battery->vbus_wake_lock, HZ);
+			__pm_wakeup_event(&battery->vbus_wake_lock, 1000);
 		current_soc = get_fuelgauge_value(FG_LEVEL);
 		if (current_soc) {
 			pr_info("%s: Returning to Normal discharge path.\n",
@@ -1868,7 +1868,7 @@ void fuelgauge_recovery_handler(struct work_struct *work)
 			pr_err("%s: 0%% wo/ charging, will be power off\n",
 								__func__);
 			battery->info.level = 0;
-			__pm_wakeup_event(&battery->vbus_wake_lock, HZ);
+			__pm_wakeup_event(&battery->vbus_wake_lock, 1000);
 			power_supply_changed(&battery->psy_battery);
 		} else {
 			pr_info("%s: 0%% w/ charging, exit low bat alarm\n",
@@ -1914,7 +1914,7 @@ int _low_battery_alarm_(struct battery_data *battery)
 	if (!get_charger_status(battery)) {
 		pr_err("Set battery level as 0, power off.\n");
 		battery->info.level = 0;
-		__pm_wakeup_event(&battery->vbus_wake_lock, HZ);
+		__pm_wakeup_event(&battery->vbus_wake_lock, 1000);
 		power_supply_changed(&battery->psy_battery);
 	}
 
