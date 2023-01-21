@@ -1,9 +1,0 @@
-Documentation
-drivers/gpu/drm
-drivers/hwmon
-drivers/iommu
-drivers/staging/westbridge
-include/drm
-include/linux/platform_data/ntc_thermistor.h
-security/smack
-drivers/cpufreq/exynos4210-cpufreq.c
