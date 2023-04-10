@@ -1,0 +1,471 @@
+{
+   sections:[
+      {
+         name:CPU,
+         elements:[
+            {
+               STitleBar:{
+                  title:"CPUFreq scaling"
+               }
+            },
+            {
+               SSeekBar:{
+                  title:"CPU max frequency",
+                  description:"Set the maximum freqency the CPU scales up to.",
+                  unit:"MHz",
+                  step:100000,
+                  weight:0.001,
+                  min:200000,
+                  max:1704000,
+                  default:1600000,
+                  action:"generic /sys/devices/system/cpu/cpu0/cpufreq/scaling_max_freq"
+               }
+            },
+            {
+               SSeekBar:{
+                  title:"CPU min frequency",
+                  description:"Set the minimum freqency the CPU scales down to.",
+                  unit:"MHz",
+                  step:100000,
+                  weight:0.001,
+                  min:100000,
+                  max:1600000,
+                  exclude:1500000,
+                  default:100000,
+                  action:"generic /sys/devices/system/cpu/cpu0/cpufreq/scaling_min_freq"
+               }
+            },
+            {
+               SOptionList:{
+                  title:"CPU governor",
+                  default:pegasusq,
+                  action:"generic /sys/devices/system/cpu/cpu0/cpufreq/scaling_governor",
+                  values:[
+                     pyramid,
+                     pegasusq,
+                     zzmoove,
+                     pegasusqplus,
+                     performance,
+                     powersave,
+                     userspace,
+                  ]
+               }
+            },
+            {
+               SPane:{
+                  title:"CPU voltage control",
+                  description:"Decreasing voltage will lower power consumption of the CPU. Increasing it on overclocked frequencies improves stability. Too low voltage may cause instabilities and freezes."
+               }
+            },
+            {
+               SSeekBar:{
+                  title:"1704 MHz",
+                  action:"cpuvolt 1704",
+                  unit:"mV",
+                  weight:0.001,
+                  min:1100,
+                  step:1,
+                  max:1600
+               }
+            },
+            {
+               SSeekBar:{
+                  title:"1600 MHz",
+                  action:"cpuvolt 1600",
+                  unit:"mV",
+                  weight:0.001,
+                  min:1100,
+                  step:1,
+                  max:1600
+               }
+            },
+            {
+               SSeekBar:{
+                  title:"1400 MHz",
+                  action:"cpuvolt 1400",
+                  unit:"mV",
+                  weight:0.001,
+                  min:900,
+                  step:1,
+                  max:1500
+               }
+            },
+            {
+               SSeekBar:{
+                  title:"1300 MHz",
+                  action:"cpuvolt 1300",
+                  unit:"mV",
+                  weight:0.001,
+                  min:900,
+                  step:1,
+                  max:1500
+               }
+            },
+            {
+               SSeekBar:{
+                  title:"1200 MHz",
+                  action:"cpuvolt 1200",
+                  unit:"mV",
+                  weight:0.001,
+                  min:850,
+                  step:1,
+                  max:1450
+               }
+            },
+            {
+               SSeekBar:{
+                  title:"1100 MHz",
+                  action:"cpuvolt 1100",
+                  unit:"mV",
+                  weight:0.001,
+                  min:850,
+                  step:1,
+                  max:1450
+               }
+            },
+            {
+               SSeekBar:{
+                  title:"1000 MHz",
+                  action:"cpuvolt 1000",
+                  unit:"mV",
+                  weight:0.001,
+                  min:800,
+                  step:1,
+                  max:1400
+               }
+            },
+            {
+               SSeekBar:{
+                  title:"900 MHz",
+                  action:"cpuvolt 900",
+                  unit:"mV",
+                  weight:0.001,
+                  min:700,
+                  step:1,
+                  max:1350
+               }
+            },
+            {
+               SSeekBar:{
+                  title:"800 MHz",
+                  action:"cpuvolt 800",
+                  unit:"mV",
+                  weight:0.001,
+                  min:700,
+                  step:1,
+                  max:1350
+               }
+            },
+            {
+               SSeekBar:{
+                  title:"700 MHz",
+                  action:"cpuvolt 700",
+                  unit:"mV",
+                  weight:0.001,
+                  min:650,
+                  step:1,
+                  max:1250
+               }
+            },
+            {
+               SSeekBar:{
+                  title:"600 MHz",
+                  action:"cpuvolt 600",
+                  unit:"mV",
+                  weight:0.001,
+                  min:600,
+                  step:1,
+                  max:1200
+               }
+            },
+            {
+               SSeekBar:{
+                  title:"500 MHz",
+                  action:"cpuvolt 500",
+                  unit:"mV",
+                  weight:0.001,
+                  min:600,
+                  step:1,
+                  max:1200
+               }
+            },
+            {
+               SSeekBar:{
+                  title:"400 MHz",
+                  action:"cpuvolt 400",
+                  unit:"mV",
+                  weight:0.001,
+                  min:600,
+                  step:1,
+                  max:1200
+               }
+            },
+            {
+               SSeekBar:{
+                  title:"300 MHz",
+                  action:"cpuvolt 300",
+                  unit:"mV",
+                  weight:0.001,
+                  min:600,
+                  step:1,
+                  max:1200
+               }
+            },
+            {
+               SSeekBar:{
+                  title:"200 MHz",
+                  action:"cpuvolt 200",
+                  unit:"mV",
+                  weight:0.001,
+                  min:600,
+                  step:1,
+                  max:1200
+              } 
+            },
+         ]
+      },
+      {
+         name:Audio,
+         elements:[
+            {
+               SPane:{
+                  title:"Boeffla Sound Engine",
+                  description:"Headphone amplification increases volume only on headphones and headsets. The controlled input is the digital input volume for the audio DAC."
+               }
+            },
+            {
+               SCheckBox:{
+                  label:"Enabled",
+                  default:1,
+                  action:"bs_s /sys/class/misc/boeffla_sound/boeffla_sound"
+               }
+            },
+            {
+               SSeekBar:{
+                  description:"Headphone left channel volume",
+                  min:0,
+                  max:63,
+                  unit:"dB",
+                  weight:1,
+                  offset:128,
+                  default:50,
+                  action:"headphone left"
+               }
+            },
+            {
+               SSeekBar:{
+                  description:"Headphone right channel volume",
+                  min:0,
+                  max:63,
+                  unit:"dB",
+                  weight:1,
+                  offset:128,
+                  default:128,
+                  action:"headphone right"
+               }
+            },
+            {
+               SCheckBox:{
+                  description:"Enables mono output",
+                  label:"Mono mixer",
+                  default:0,
+                  action:"bs_cb /sys/class/misc/boeffla_sound/mono_downmix"
+               }
+            },
+            {
+               SPane:{
+                  title:"Speaker Amplification",
+                  description:"Speaker amplification increases volume on the speaker."
+               }
+            },
+            {
+               SSeekBar:{
+                  description:"Main speaker volume",
+                  min:0,
+                  max:63,
+                  unit:"dB",
+                  weight:1,
+                  default:0,
+                  action:"speaker_vol /sys/class/misc/boeffla_sound/speaker_volume"
+               }
+            },
+            {
+               SCheckBox:{
+                  label:"Speaker tuning",
+                  default:0,
+                  action:"bs_cb /sys/class/misc/boeffla_sound/speaker_tuning"
+               }
+            },
+            {
+               SCheckBox:{
+                  description:"Disables the main speaker when audio is outputted via headphones; all audio routed to the speaker is disabled (!!!).",
+                  label:"Privacy mode",
+                  default:0,
+                  action:"bs_cb /sys/class/misc/boeffla_sound/privacy_mode"
+               }
+            },
+            {
+               SPane:{
+                  title:"Digital-to-analog converter options",
+               }
+            },
+            {
+               SCheckBox:{
+                  label:"DAC direct",
+                  default:1,
+                  action:"bs_cb /sys/class/misc/boeffla_sound/dac_direct"
+               }
+            },    
+            {
+               SCheckBox:{
+                  label:"DAC oversampling",
+                  default:1,
+                  action:"bs_cb /sys/class/misc/boeffla_sound/dac_oversampling"
+               }
+            },     
+            {
+               SCheckBox:{
+                  label:"FLL tuning",
+                  default:1,
+                  action:"bs_cb /sys/class/misc/boeffla_sound/fll_tuning"
+               }
+            },         
+         ]
+      },
+      {
+         name:Charging,
+         elements:[
+            {
+               SDescription:{
+                  description:"Device charging currents are composed of input current coming into the device (Nominal 5V) and charge current fed to the battery (Battery Charge Voltage). Charger detection divides charging cable types into several categories as described below. Input current is the sum of device load and charging load. If charging current exceeds input load, then charging current is dynamically adjusted. For avoiding battery deterioration, charging currents of less than 0.7 Coloumb are advised; ex. 2600mAh (Capacity) * 0.7C = ~1820mA."
+               }
+            },
+            {
+               SPane:{
+                  title:"Charge levels",
+               }
+            },
+            {
+               SSeekBar:{
+                  description:"Charge level AC",
+                  min:100,
+                  max:2000,
+                  unit:"mA",
+                  step:100,
+                  default:1900,
+                  action:"chg_lvl /sys/kernel/charge_levels/charge_level_ac"
+               }
+            },
+            {
+               SSeekBar:{
+                  description:"Charge level USB",
+                  min:100,
+                  max:1600,
+                  unit:"mA",
+                  step:100,
+                  default:500,
+                  action:"chg_lvl /sys/kernel/charge_levels/charge_level_usb"
+               }
+            },
+            {
+               SSeekBar:{
+                  description:"Charge level Wireless",
+                  min:100,
+                  max:1600,
+                  unit:"mA",
+                  step:100,
+                  default:500,
+                  action:"chg_lvl /sys/kernel/charge_levels/charge_level_wireless"
+               }
+            },
+            {
+               SPane:{
+                  title:"Charger logic",
+               }
+            },
+            {
+               SCheckBox:{
+                  label:"Ignore unstable power",
+                  default:0,
+                  action:"generic /sys/kernel/charge_levels/ignore_unstable_power"
+               }
+            },  
+            {
+               SCheckBox:{
+                  label:"Ignore safety margin",
+                  default:0,
+                  action:"generic /sys/kernel/charge_levels/ignore_safety_margin"
+               }
+            }, 
+         ]
+      },
+      {
+         name:I/O,
+         elements:[
+            {
+               SPane:{
+                  title:"I/O schedulers",
+                  description:"Set the active I/O elevator algorithm. The scheduler decides how to handle I/O requests and how to handle them."
+               }
+            },
+            {
+               SOptionList:{
+                  title:"Internal storage scheduler",
+                  default:cfq,
+                  action:"bracket-option /sys/block/mmcblk0/queue/scheduler",
+                  values:[
+                     noop,
+                     deadline,
+                     cfq,
+                     bfq,
+                  ]
+               }
+            },
+            {
+               SOptionList:{
+                  title:"SD card scheduler",
+                  default:cfq,
+                  action:"bracket-option /sys/block/mmcblk1/queue/scheduler",
+                  values:[
+                     noop,
+                     deadline,
+                     cfq,
+                     bfq,
+                  ]
+               }
+            },
+            {
+               SSeekBar:{
+                  title:"Internal storage read-ahead",
+                  description:"The read-ahead value on the internal phone memory.",
+                  max:4096,
+                  min:128,
+                  unit:"kB",
+                  step:128,
+                  default:2048,
+                  action:"generic /sys/block/mmcblk0/queue/read_ahead_kb"
+               }
+            },
+            {
+               SSeekBar:{
+                  title:"SD card read-ahead",
+                  description:"The read-ahead value on the external SD card.",
+                  max:4096,
+                  min:128,
+                  unit:"kB",
+                  step:128,
+                  default:2048,
+                  action:"generic /sys/block/mmcblk1/queue/read_ahead_kb"
+               }
+            },
+            {
+               SCheckBox:{
+                  label:"/system write-protection",
+                  default:0,
+                  action:"generic /proc/syslock_status"
+               }
+            }, 
+         ]
+      }
+   ]
+}

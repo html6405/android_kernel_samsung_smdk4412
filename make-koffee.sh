@@ -120,7 +120,16 @@ make_flashable()
 	fi
 	if [ "$DEVICE" == "p4noterf" ]; then
 		cp -R $SOURCE_PATH/anykernel_boeffla-n8000/* $REPACK_PATH
-	fi	
+	fi
+	if [ "$DEVICE" == "kona3gxx" ]; then
+  		cp -R $SOURCE_PATH/anykernel_boeffla-n51xx/* $REPACK_PATH
+  fi
+  if [ "$DEVICE" == "konawifixx" ]; then
+    		cp -R $SOURCE_PATH/anykernel_boeffla-n51xx/* $REPACK_PATH
+  fi
+	if [ "$DEVICE" == "konaltexx" ]; then
+		cp -R $SOURCE_PATH/anykernel_boeffla-n51xx/* $REPACK_PATH
+	fi
 	if [ "$DEVICE" == "t0lte" ]; then
 		cp -R $SOURCE_PATH/anykernel_boeffla-t0lte/* $REPACK_PATH
 	else		  
@@ -256,7 +265,19 @@ main() {
 	if [ "$DEFCONFIG" == "lineageos_t0lte_defconfig" ]; then
 		DEVICE="t0lte"
 	fi
-	
+
+	if [ "$DEFCONFIG" == "lineageos_5100_defconfig" ]; then
+  	DEVICE="kona3gxx"
+  fi
+
+  if [ "$DEFCONFIG" == "lineageos_5110_defconfig" ]; then
+   	DEVICE="konawifixx"
+  fi
+
+	if [ "$DEFCONFIG" == "lineageos_5120_defconfig" ]; then
+		DEVICE="konaltexx"
+	fi
+
 	if [ -z $TOOLCHAIN ]; then
 		echo "FATAL: No toolchain prefix specified!"
 		echo "*** BUILD FAILED ***"

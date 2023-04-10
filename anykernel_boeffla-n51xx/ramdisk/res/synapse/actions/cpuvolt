@@ -1,0 +1,13 @@
+# cpuvolt [freq] [voltage]
+
+
+if [[ -f "/sys/devices/system/cpu/cpu0/cpufreq/UV_mV_table" ]]; then
+	if [[ ! -z "$2" ]]; then
+
+		PREV=$(cat /sys/devices/system/cpu/cpu0/cpufreq/UV_mV_table | grep "^${1}mhz" | grep -io " ...* " | sed 's/^[[:space:]]*\|[[:space:]]*$//g'
+)
+		echo $(cat /sys/devices/system/cpu/cpu0/cpufreq/UV_mV_table | grep -io " ...* " | sed 's/^[[:space:]]*\|[[:space:]]*$//g' | sed "s/${PREV}/${2}/" ) > "/sys/devices/system/cpu/cpu0/cpufreq/UV_mV_table" 
+	fi
+	echo $(cat /sys/devices/system/cpu/cpu0/cpufreq/UV_mV_table | grep "^${1}mhz" | grep -io " ...* " | sed 's/^[[:space:]]*\|[[:space:]]*$//g')
+else # avoid errors
+	echo "0"; fi

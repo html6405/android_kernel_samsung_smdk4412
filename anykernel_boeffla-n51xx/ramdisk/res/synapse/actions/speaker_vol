@@ -1,0 +1,13 @@
+# speaker_vol [chan] [vol]
+
+
+if [[ -f "/sys/class/misc/boeffla_sound/speaker_volume" ]]; then
+	if [[ ! -z "$2" ]]; then
+
+		LEFT=$(cat /sys/class/misc/boeffla_sound/speaker_volume | grep "Left: " | awk '{print $2}')
+
+		echo "${2} ${2}" > /sys/class/misc/boeffla_sound/speaker_volume
+	fi
+	cat /sys/class/misc/boeffla_sound/speaker_volume | grep "Left: " | awk '{print $2}'
+else # avoid errors
+	echo "0"; fi

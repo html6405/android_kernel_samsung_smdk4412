@@ -1,0 +1,23 @@
+# headphone [chan] [vol]
+
+
+if [[ -f "/sys/class/misc/boeffla_sound/headphone_volume" ]]; then
+	if [[ ! -z "$2" ]]; then
+
+		LEFT=$(cat /sys/class/misc/boeffla_sound/headphone_volume | grep "Left: " | awk '{print $2}')
+		RIGHT=$(cat /sys/class/misc/boeffla_sound/headphone_volume | grep "Right: " | awk '{print $2}')
+		if [ "$1" = "left" ]; then
+			echo "${2} ${RIGHT}" > /sys/class/misc/boeffla_sound/headphone_volume
+		fi
+		if [ "$1" = "right" ]; then
+			echo "${LEFT} ${2}" > /sys/class/misc/boeffla_sound/headphone_volume
+		fi
+	fi
+	if [ "$1" = "left" ]; then
+		cat /sys/class/misc/boeffla_sound/headphone_volume | grep "Left: " | awk '{print $2}'
+	fi
+	if [ "$1" = "right" ]; then
+		cat /sys/class/misc/boeffla_sound/headphone_volume | grep "Right: " | awk '{print $2}'
+	fi	
+else # avoid errors
+	echo "0"; fi
