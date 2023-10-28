@@ -116,32 +116,7 @@ static inline void __iomem *__typesafe_io(unsigned long addr)
 /*
  * Now, pick up the machine-defined IO definitions
  */
-#ifdef CONFIG_NEED_MACH_IO_H
 #include <mach/io.h>
-#else
-#define __io(a)		__typesafe_io((a) & IO_SPACE_LIMIT)
-#endif
-
-/*
- * This is the limit of PC card/PCI/ISA IO space, which is by default
- * 64K if we have PC card, PCI or ISA support.  Otherwise, default to
- * zero to prevent ISA/PCI drivers claiming IO space (and potentially
- * oopsing.)
- *
- * Only set this larger if you really need inb() et.al. to operate over
- * a larger address space.  Note that SOC_COMMON ioremaps each sockets
- * IO space area, and so inb() et.al. must be defined to operate as per
- * readb() et.al. on such platforms.
- */
-#ifndef IO_SPACE_LIMIT
-#if defined(CONFIG_PCMCIA_SOC_COMMON) || defined(CONFIG_PCMCIA_SOC_COMMON_MODULE)
-#define IO_SPACE_LIMIT ((resource_size_t)0xffffffff)
-#elif defined(CONFIG_PCI) || defined(CONFIG_ISA) || defined(CONFIG_PCCARD)
-#define IO_SPACE_LIMIT ((resource_size_t)0xffff)
-#else
-#define IO_SPACE_LIMIT ((resource_size_t)0)
-#endif
-#endif
 
 /*
  *  IO port access primitives
