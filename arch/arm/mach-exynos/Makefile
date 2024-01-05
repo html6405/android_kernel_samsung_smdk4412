@@ -249,7 +249,7 @@ obj-$(CONFIG_MACH_MIDAS)                += sec-reboot.o
 obj-$(CONFIG_MACH_KONA_SENSOR)          += kona-sensor.o
 else
 ifeq ($(CONFIG_MACH_T0),y)
-obj-$(CONFIG_MACH_MIDAS) 		+= midas-sensor_n7100.o
+obj-$(CONFIG_MACH_MIDAS) 		+= midas-sensor_n7100.o sec-reboot.o
 else
 obj-$(CONFIG_MACH_MIDAS)		+= sec-reboot.o midas-sensor.o
 endif
