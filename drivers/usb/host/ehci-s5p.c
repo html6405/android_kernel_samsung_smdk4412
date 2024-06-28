@@ -278,7 +278,7 @@ static int s5p_ehci_resume(struct device *dev)
 	}
 
 	if (time_before(jiffies, ehci->next_statechange))
-		msleep(10);
+		usleep_range(10000, 11000);
 
 	/* Mark hardware accessible again as we are out of D3 state by now */
 	set_bit(HCD_FLAG_HW_ACCESSIBLE, &hcd->flags);
@@ -320,13 +320,22 @@ static int s5p_ehci_resume(struct device *dev)
 #if defined(CONFIG_LINK_DEVICE_HSIC) || defined(CONFIG_LINK_DEVICE_USB) \
 		|| defined(CONFIG_MDM_HSIC_PM)
 	s5p_wait_for_cp_resume(pdev, hcd);
+	pm_runtime_mark_last_busy(&hcd->self.root_hub->dev);
 #endif
 	return 0;
 }
 
+int s5p_ehci_bus_resume(struct usb_hcd *hcd)
+{
+	/* When suspend is failed, re-enable clocks & PHY */
+	pm_runtime_resume(hcd->self.controller);
+
+	return ehci_bus_resume(hcd);
+}
 #else
 #define s5p_ehci_suspend	NULL
 #define s5p_ehci_resume		NULL
+#define s5p_ehci_bus_resume	NULL
 #endif
 
 #ifdef CONFIG_USB_SUSPEND
@@ -421,8 +430,8 @@ static const struct hc_driver s5p_ehci_hc_driver = {
 
 	.hub_status_data	= ehci_hub_status_data,
 	.hub_control		= ehci_hub_control,
+	.bus_resume		= s5p_ehci_bus_resume,
 	.bus_suspend		= ehci_bus_suspend,
-	.bus_resume		= ehci_bus_resume,
 
 	.relinquish_port	= ehci_relinquish_port,
 	.port_handed_over	= ehci_port_handed_over,
@@ -504,8 +513,12 @@ static ssize_t store_ehci_power(struct device *dev,
 		/*HSIC IPC control the ACTIVE_STATE*/
 		if (pdata && pdata->noti_host_states)
 			pdata->noti_host_states(pdev, S5P_HOST_ON);
-#endif
+
+		/* mif allow the ehci runtime after enumeration */
+		pm_runtime_forbid(dev);
+#else
 		pm_runtime_allow(dev);
+#endif
 	}
 exit:
 	device_unlock(dev);
