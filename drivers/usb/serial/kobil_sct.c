@@ -50,7 +50,7 @@
 #include <linux/ioctl.h>
 #include "kobil_sct.h"
 
-static bool debug;
+static int debug;
 
 /* Version Information */
 #define DRIVER_VERSION "21/05/2004"

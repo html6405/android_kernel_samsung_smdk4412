@@ -37,7 +37,7 @@
 #include <linux/serial.h>
 #include "usb-wwan.h"
 
-static bool debug;
+static int debug;
 
 void usb_wwan_dtr_rts(struct usb_serial_port *port, int on)
 {

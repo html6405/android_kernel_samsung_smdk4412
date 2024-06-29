@@ -28,7 +28,7 @@
 #include <linux/usb.h>
 #include <linux/usb/serial.h>
 
-static bool debug;
+static int debug;
 
 /*
  * Version Information
