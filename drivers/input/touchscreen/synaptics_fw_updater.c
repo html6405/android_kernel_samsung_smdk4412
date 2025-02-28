@@ -473,7 +473,7 @@ int synaptics_fw_updater(struct synaptics_drv_data *data, u8 *fw_data)
 	if (update) {
 		printk(KERN_DEBUG "[TSP] tsp update!!\n");
 		disable_irq(irq);
-		__pm_stay_awake(&data->wakelock);
+		wake_lock(&data->wakelock);
 		synaptics_fw_initialize(data);
 		synaptics_read_config_info(data);
 		synaptics_read_fw_info(data);
@@ -495,7 +495,7 @@ int synaptics_fw_updater(struct synaptics_drv_data *data, u8 *fw_data)
 			msleep(100);
 		}
 
-		__pm_relax(&data->wakelock);
+		wake_unlock(&data->wakelock);
 		enable_irq(irq);
 	}
 	return 0;

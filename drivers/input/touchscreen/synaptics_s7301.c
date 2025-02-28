@@ -1159,7 +1159,7 @@ static int __init synaptics_ts_probe(struct i2c_client *client,
 	}
 
 	mutex_init(&ddata->mutex);
-	wakeup_source_init(&ddata->wakelock, "touch");
+	wake_lock_init(&ddata->wakelock, WAKE_LOCK_SUSPEND, "touch");
 
 	INIT_DELAYED_WORK(&ddata->init_dwork, init_function_data_dwork);
 	INIT_DELAYED_WORK(&ddata->resume_dwork, synaptics_ts_resume_dwork);

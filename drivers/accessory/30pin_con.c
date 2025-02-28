@@ -73,7 +73,7 @@ struct acc_con_info {
 	struct delayed_work acc_id_dwork;
 	struct switch_dev dock_switch;
 	struct switch_dev ear_jack_switch;
-	struct wakeup_source wake_lock;
+	struct wake_lock wake_lock;
 	struct s3c_adc_client *padc;
 	struct sec_30pin_callbacks callbacks;
 	enum accessory_type current_accessory;
@@ -492,11 +492,11 @@ static void acc_check_dock_detection(struct acc_con_info *acc)
 static irqreturn_t acc_dock_isr(int irq, void *ptr)
 {
 	struct acc_con_info *acc = ptr;
-	__pm_stay_awake(&acc->wake_lock);
+	wake_lock(&acc->wake_lock);
 	ACC_CONDEV_DBG
 		("A dock station attached or detached..");
 	acc_check_dock_detection(acc);
-	__pm_relax(&acc->wake_lock);
+	wake_unlock(&acc->wake_lock);
 	return IRQ_HANDLED;
 }
 
@@ -761,7 +761,7 @@ static int acc_con_probe(struct platform_device *pdev)
 	if (retval < 0)
 		goto err_sw_jack;
 
-	wakeup_source_init(&acc->wake_lock, "30pin_con");
+	wake_lock_init(&acc->wake_lock, WAKE_LOCK_SUSPEND, "30pin_con");
 
 	INIT_DELAYED_WORK(&acc->acc_dwork, acc_dwork_int_init);
 	schedule_delayed_work(&acc->acc_dwork, msecs_to_jiffies(10000));

@@ -405,7 +405,7 @@ static void resp_avail_cb(struct urb *urb)
 	spin_unlock(&dev->rx_lock);
 
 	wake_up(&dev->read_wait_queue);
-	__pm_wakeup_event(&dev->ctrl_wake, 500);
+	wake_lock_timeout(&dev->ctrl_wake, msecs_to_jiffies(500));
 
 	if (urb->status == -ENOENT)
 		return;
@@ -1455,7 +1455,7 @@ int rmnet_usb_ctrl_init(void)
 		init_usb_anchor(&dev->tx_submitted);
 		atomic_set(&dev->open_cnt, 0);
 
-		wakeup_source_init(&dev->ctrl_wake, dev->name);
+		wake_lock_init(&dev->ctrl_wake, WAKE_LOCK_SUSPEND, dev->name);
 #ifdef RMNET_CTRL_TX_WORK
 		INIT_WORK(&dev->tx_work, rmnet_ctrl_tx_work);
 		init_usb_anchor(&dev->tx_ready);

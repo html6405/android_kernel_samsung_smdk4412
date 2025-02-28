@@ -16,6 +16,7 @@
 #include <linux/slab.h>
 #include <linux/workqueue.h>
 #include <linux/input.h>
+#include <linux/wakelock.h>
 #include <linux/suspend.h>
 
 #include <sound/soc.h>
@@ -96,7 +97,7 @@ struct wm1811_machine_priv {
 	struct snd_soc_jack jack;
 	struct snd_soc_codec *codec;
 	struct delayed_work mic_work;
-	struct wakeup_source jackdet_wake_lock;
+	struct wake_lock jackdet_wake_lock;
 };
 
 
@@ -345,7 +346,7 @@ static void m3_mic_id(void *data, u16 status)
 	int report;
 
 
-	__pm_wakeup_event(&wm1811->jackdet_wake_lock, 5 * HZ);
+	wake_lock_timeout(&wm1811->jackdet_wake_lock, 5 * HZ);
 
 	/* Either nothing present or just starting detection */
 	if (!(status & WM8958_MICD_STS)) {
@@ -923,7 +924,8 @@ static int m3_wm1811_init_paiftx(struct snd_soc_pcm_runtime *rtd)
 	/* To wakeup for earjack event in suspend mode */
 	enable_irq_wake(control->irq);
 
-	wakeup_source_init(&wm1811->jackdet_wake_lock, "m3_jackdet");
+	wake_lock_init(&wm1811->jackdet_wake_lock,
+					WAKE_LOCK_SUSPEND, "m3_jackdet");
 
 	/* To support PBA function test */
 	jack_class = class_create(THIS_MODULE, "audio");

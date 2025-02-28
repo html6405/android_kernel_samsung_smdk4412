@@ -130,14 +130,14 @@ struct battery_data {
 	struct delayed_work	full_comp_work;
 	struct alarm		alarm;
 	struct mutex		work_lock;
-	struct wakeup_source	vbus_wake_lock;
-	struct wakeup_source	cable_wake_lock;
-	struct wakeup_source	work_wake_lock;
-	struct wakeup_source	fullcharge_wake_lock;
+	struct wake_lock	vbus_wake_lock;
+	struct wake_lock	cable_wake_lock;
+	struct wake_lock	work_wake_lock;
+	struct wake_lock	fullcharge_wake_lock;
 	struct s3c_adc_client *padc;
 
 #ifdef __TEST_DEVICE_DRIVER__
-	struct wakeup_source	wake_lock_for_dev;
+	struct wake_lock	wake_lock_for_dev;
 #endif /* __TEST_DEVICE_DRIVER__ */
 #if defined(CONFIG_TARGET_LOCALE_KOR)
 	struct proc_dir_entry *entry;
@@ -283,7 +283,7 @@ static void sec_battery_alarm(struct alarm *alarm)
 			container_of(alarm, struct battery_data, alarm);
 
 	pr_debug("%s : sec_battery_alarm.....\n", __func__);
-	__pm_stay_awake(&battery->work_wake_lock);
+	wake_lock(&battery->work_wake_lock);
 	schedule_work(&battery->battery_work);
 }
 
@@ -421,8 +421,7 @@ static irqreturn_t sec_TA_nCHG_interrupt_handler(int irq, void *arg)
 	cancel_delayed_work(&battery->fullcharging_work);
 	schedule_delayed_work(&battery->fullcharging_work,
 			msecs_to_jiffies(300));
-	__pm_wakeup_event(&battery->fullcharge_wake_lock, 30000);
-
+	wake_lock_timeout(&battery->fullcharge_wake_lock, HZ * 30);
 
 	return IRQ_HANDLED;
 }
@@ -436,7 +435,7 @@ static irqreturn_t sec_TA_nCon_interrupt_handler(int irq, void *arg)
 	disable_irq_nosync(irq);
 	cancel_delayed_work(&battery->TA_work);
 	queue_delayed_work(battery->sec_TA_workqueue, &battery->TA_work, 10);
-	__pm_wakeup_event(&battery->cable_wake_lock, 2000);
+	wake_lock_timeout(&battery->cable_wake_lock, HZ * 2);
 
 	return IRQ_HANDLED;
 }
@@ -1452,7 +1451,7 @@ static ssize_t sec_bat_store(struct device *dev,
 		break;
 	case UPDATE:
 		pr_info("%s: battery update\n", __func__);
-		__pm_stay_awake(&debug_batterydata->work_wake_lock);
+		wake_lock(&debug_batterydata->work_wake_lock);
 		schedule_work(&debug_batterydata->battery_work);
 		ret = count;
 		break;
@@ -1536,10 +1535,10 @@ static ssize_t sec_batt_test_store(struct device *dev,
 
 		dev_dbg(dev, "%s: suspend lock (%d)\n", __func__, mode);
 		if (mode)
-			__pm_stay_awake(&debug_batterydata->wake_lock_for_dev);
+			wake_lock(&debug_batterydata->wake_lock_for_dev);
 		else
-			__pm_wakeup_event(&debug_batterydata->wake_lock_for_dev,
-					500);
+			wake_lock_timeout(&debug_batterydata->wake_lock_for_dev,
+					HZ / 2);
 		ret = count;
 		break;
 
@@ -1607,22 +1606,22 @@ static int sec_cable_status_update(struct battery_data *battery, int status)
 
 	if (source == CHARGER_USB || source == CHARGER_AC || \
 		source == CHARGER_MISC  || source == CHARGER_DOCK) {
-		__pm_stay_awake(&battery->vbus_wake_lock);
+		wake_lock(&battery->vbus_wake_lock);
 	} else {
 		/* give userspace some time to see the uevent and update
 		* LED state or whatnot...
 		*/
 		if (!get_charger_status(battery)) {
 			if (battery->charging_mode_booting)
-				__pm_wakeup_event(&battery->vbus_wake_lock,
-						5000);
+				wake_lock_timeout(&battery->vbus_wake_lock,
+						5 * HZ);
 			else
-				__pm_wakeup_event(&battery->vbus_wake_lock,
-						500);
+				wake_lock_timeout(&battery->vbus_wake_lock,
+						HZ / 2);
 		}
 	}
 
-	__pm_stay_awake(&battery->work_wake_lock);
+	wake_lock(&battery->work_wake_lock);
 	schedule_work(&battery->battery_work);
 
 	return ret;
@@ -1728,7 +1727,7 @@ static void sec_bat_work(struct work_struct *work)
 
 	/* prevent suspend before starting the alarm */
 	local_irq_save(flags);
-	__pm_relax(&battery->work_wake_lock);
+	wake_unlock(&battery->work_wake_lock);
 	sec_program_alarm(battery, FAST_POLL);
 	local_irq_restore(flags);
 }
@@ -1769,7 +1768,7 @@ static void sec_bat_resume(struct device *dev)
 		battery->slow_poll = 0;
 	}
 
-	__pm_stay_awake(&battery->work_wake_lock);
+	wake_lock(&battery->work_wake_lock);
 	schedule_work(&battery->battery_work);
 
 	pr_info("%s end\n", __func__);
@@ -1820,7 +1819,7 @@ void sec_cable_charging(struct battery_data *battery)
 		pr_info("battery is full charged ");
 	}
 
-	__pm_stay_awake(&battery->work_wake_lock);
+	wake_lock(&battery->work_wake_lock);
 	schedule_work(&battery->battery_work);
 }
 
@@ -1847,7 +1846,7 @@ void fuelgauge_recovery_handler(struct work_struct *work)
 		pr_err("%s: Reduce the Reported SOC by 1 unit, wait for 30s\n",
 								__func__);
 		if (!battery->info.charging_enabled)
-			__pm_wakeup_event(&battery->vbus_wake_lock, 1000);
+			wake_lock_timeout(&battery->vbus_wake_lock, HZ);
 		current_soc = get_fuelgauge_value(FG_LEVEL);
 		if (current_soc) {
 			pr_info("%s: Returning to Normal discharge path.\n",
@@ -1868,7 +1867,7 @@ void fuelgauge_recovery_handler(struct work_struct *work)
 			pr_err("%s: 0%% wo/ charging, will be power off\n",
 								__func__);
 			battery->info.level = 0;
-			__pm_wakeup_event(&battery->vbus_wake_lock, 1000);
+			wake_lock_timeout(&battery->vbus_wake_lock, HZ);
 			power_supply_changed(&battery->psy_battery);
 		} else {
 			pr_info("%s: 0%% w/ charging, exit low bat alarm\n",
@@ -1914,7 +1913,7 @@ int _low_battery_alarm_(struct battery_data *battery)
 	if (!get_charger_status(battery)) {
 		pr_err("Set battery level as 0, power off.\n");
 		battery->info.level = 0;
-		__pm_wakeup_event(&battery->vbus_wake_lock, 1000);
+		wake_lock_timeout(&battery->vbus_wake_lock, HZ);
 		power_supply_changed(&battery->psy_battery);
 	}
 
@@ -2105,16 +2104,16 @@ static int __devinit sec_bat_probe(struct platform_device *pdev)
 
 	mutex_init(&battery->work_lock);
 
-	wakeup_source_init(&battery->vbus_wake_lock,
+	wake_lock_init(&battery->vbus_wake_lock, WAKE_LOCK_SUSPEND,
 		"vbus wake lock");
-	wakeup_source_init(&battery->work_wake_lock,
+	wake_lock_init(&battery->work_wake_lock, WAKE_LOCK_SUSPEND,
 		"batt_work wake lock");
-	wakeup_source_init(&battery->cable_wake_lock,
+	wake_lock_init(&battery->cable_wake_lock, WAKE_LOCK_SUSPEND,
 		"temp wake lock");
-	wakeup_source_init(&battery->fullcharge_wake_lock,
+	wake_lock_init(&battery->fullcharge_wake_lock, WAKE_LOCK_SUSPEND,
 		"fullcharge wake lock");
 #ifdef __TEST_DEVICE_DRIVER__
-	wakeup_source_init(&battery->wake_lock_for_dev,
+	wake_lock_init(&battery->wake_lock_for_dev, WAKE_LOCK_SUSPEND,
 		"test mode wake lock");
 #endif /* __TEST_DEVICE_DRIVER__ */
 
@@ -2249,10 +2248,10 @@ err_usb_psy_register:
 err_battery_psy_register:
 	destroy_workqueue(battery->sec_TA_workqueue);
 err_workqueue_init:
-	wakeup_source_trash(&battery->vbus_wake_lock);
-	wakeup_source_trash(&battery->work_wake_lock);
-	wakeup_source_trash(&battery->cable_wake_lock);
-	wakeup_source_trash(&battery->fullcharge_wake_lock);
+	wake_lock_destroy(&battery->vbus_wake_lock);
+	wake_lock_destroy(&battery->work_wake_lock);
+	wake_lock_destroy(&battery->cable_wake_lock);
+	wake_lock_destroy(&battery->fullcharge_wake_lock);
 	mutex_destroy(&battery->work_lock);
 err_pdata:
 	kfree(battery);
@@ -2278,10 +2277,10 @@ static int __devexit sec_bat_remove(struct platform_device *pdev)
 	cancel_delayed_work(&battery->fullcharging_work);
 	cancel_delayed_work(&battery->full_comp_work);
 
-	wakeup_source_trash(&battery->vbus_wake_lock);
-	wakeup_source_trash(&battery->work_wake_lock);
-	wakeup_source_trash(&battery->cable_wake_lock);
-	wakeup_source_trash(&battery->fullcharge_wake_lock);
+	wake_lock_destroy(&battery->vbus_wake_lock);
+	wake_lock_destroy(&battery->work_wake_lock);
+	wake_lock_destroy(&battery->cable_wake_lock);
+	wake_lock_destroy(&battery->fullcharge_wake_lock);
 	mutex_destroy(&battery->work_lock);
 
 	kfree(battery);

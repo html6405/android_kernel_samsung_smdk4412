@@ -1527,7 +1527,7 @@ static int wacom_i2c_probe(struct i2c_client *client,
 
 	/*Initializing for semaphor */
 	mutex_init(&wac_i2c->lock);
-	wakeup_source_init(&wac_i2c->wakelock, "wacom");
+	wake_lock_init(&wac_i2c->wakelock, WAKE_LOCK_SUSPEND, "wacom");
 	INIT_DELAYED_WORK(&wac_i2c->resume_work, wacom_i2c_resume_work);
 #if defined(WACOM_IRQ_WORK_AROUND)
 	INIT_DELAYED_WORK(&wac_i2c->pendct_dwork, wacom_i2c_pendct_work);

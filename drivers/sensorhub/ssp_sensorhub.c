@@ -406,7 +406,7 @@ static int ssp_senosrhub_thread_func(void *arg)
 			/* report sensorhub event to user */
 			ssp_report_sensorhub_length(hub_data,
 					hub_data->first_event->length);
-			__pm_wakeup_event(&hub_data->sensorhub_wake_lock, 5000);
+			wake_lock_timeout(&hub_data->sensorhub_wake_lock, 5*HZ);
 			hub_data->transfer_ready++;
 		}
 
@@ -472,7 +472,7 @@ int ssp_handle_sensorhub_large_data(struct ssp_data *ssp_data, u8 sub_cmd)
 	if (ret >= 0) {
 		ssp_report_sensorhub_length(hub_data,
 			hub_data->large_library_length);
-		__pm_wakeup_event(&hub_data->sensorhub_wake_lock, 3000);
+		wake_lock_timeout(&hub_data->sensorhub_wake_lock, 3*HZ);
 	} else {
 		pr_err("%s: ssp_receive_large_msg err(%d)", __func__, ret);
 	}
@@ -502,7 +502,8 @@ int ssp_initialize_sensorhub(struct ssp_data *ssp_data)
 		goto err_input_allocate_device_sensorhub;
 	}
 
-	wakeup_source_init(&hub_data->sensorhub_wake_lock, "sensorhub_wake_lock");
+	wake_lock_init(&hub_data->sensorhub_wake_lock, WAKE_LOCK_SUSPEND,
+			"sensorhub_wake_lock");
 	INIT_LIST_HEAD(&hub_data->events_head.list);
 	init_waitqueue_head(&hub_data->sensorhub_waitqueue);
 	init_completion(&hub_data->transfer_done);
@@ -547,7 +548,7 @@ err_misc_register:
 	input_unregister_device(hub_data->sensorhub_input_dev);
 err_input_register_device_sensorhub:
 	complete_all(&hub_data->transfer_done);
-	wakeup_source_trash(&hub_data->sensorhub_wake_lock);
+	wake_lock_destroy(&hub_data->sensorhub_wake_lock);
 err_input_allocate_device_sensorhub:
 	kfree(hub_data);
 	return ret;
@@ -561,7 +562,7 @@ void ssp_remove_sensorhub(struct ssp_data *ssp_data)
 	ssp_sensorhub_fops.unlocked_ioctl = NULL;
 	misc_deregister(&hub_data->sensorhub_device);
 	input_unregister_device(hub_data->sensorhub_input_dev);
-	wakeup_source_trash(&hub_data->sensorhub_wake_lock);
+	wake_lock_destroy(&hub_data->sensorhub_wake_lock);
 	complete_all(&hub_data->transfer_done);
 	if (hub_data->sensorhub_task)
 		kthread_stop(hub_data->sensorhub_task);

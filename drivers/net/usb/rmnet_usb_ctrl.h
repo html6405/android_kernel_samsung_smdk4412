@@ -74,7 +74,7 @@ struct rmnet_ctrl_dev {
 	unsigned int		zlp_cnt;
 	unsigned int		tx_ctrl_in_req_cnt;
 
-	struct wakeup_source	ctrl_wake;
+	struct wake_lock	ctrl_wake;
 
 	/* reset handler */
 	struct notifier_block	reset_notifier_block;

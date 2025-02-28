@@ -43,7 +43,7 @@ struct ssp_sensorhub_data {
 	struct ssp_data *ssp_data;
 	struct input_dev *sensorhub_input_dev;
 	struct miscdevice sensorhub_device;
-	struct wakeup_source sensorhub_wake_lock;
+	struct wake_lock sensorhub_wake_lock;
 	struct completion transfer_done;
 	struct task_struct *sensorhub_task;
 	struct sensorhub_event events_head;

@@ -126,7 +126,7 @@ void report_prox_data(struct ssp_data *data, struct sensor_value *proxdata)
 		(!proxdata->prox[0]));
 	input_sync(data->prox_input_dev);
 
-	__pm_wakeup_event(&data->ssp_wake_lock, 3000);
+	wake_lock_timeout(&data->ssp_wake_lock, 3 * HZ);
 }
 
 void report_prox_raw_data(struct ssp_data *data,
