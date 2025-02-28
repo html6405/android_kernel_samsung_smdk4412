@@ -1,7 +1,7 @@
 /*
  * Customer HW 4 dependant file
  *
- * Copyright (C) 1999-2014, Broadcom Corporation
+ * Copyright (C) 1999-2016, Broadcom Corporation
  * 
  *      Unless you and Broadcom execute a separate written software license
  * agreement governing use of this software, this software is licensed to you
@@ -175,10 +175,10 @@ const struct cntry_locales_custom translate_custom_table[] = {
 	{"IR", "XZ", 11},	/* Universal if Country code is IRAN, (ISLAMIC REPUBLIC OF) */
 	{"SD", "XZ", 11},	/* Universal if Country code is SUDAN */
 	{"SY", "XZ", 11},	/* Universal if Country code is SYRIAN ARAB REPUBLIC */
-	{"GL", "XZ", 11},	/* Universal if Country code is GREENLAND */
 	{"PS", "XZ", 11},	/* Universal if Country code is PALESTINIAN TERRITORY, OCCUPIED */
 	{"TL", "XZ", 11},	/* Universal if Country code is TIMOR-LESTE (EAST TIMOR) */
 	{"MH", "XZ", 11},	/* Universal if Country code is MARSHALL ISLANDS */
+	{"GL", "GP", 2},
 	{"AL", "AL", 2},
 	{"DZ", "GB", 6},
 	{"AS", "AS", 12},
@@ -192,17 +192,16 @@ const struct cntry_locales_custom translate_custom_table[] = {
 	{"AZ", "AZ", 2},
 	{"BS", "BS", 2},
 	{"BH", "BH", 4},
-	{"BD", "AO", 0},
+	{"BD", "BD", 1},
 	{"BY", "BY", 3},
 	{"BE", "BE", 4},
 	{"BM", "BM", 12},
 	{"BA", "BA", 2},
-	{"BR", "BR", 4},
+	{"BR", "BR", 2},
 	{"VG", "VG", 2},
 	{"BN", "BN", 4},
 	{"BG", "BG", 4},
 	{"KH", "KH", 2},
-	{"CA", "CA", 31},
 	{"KY", "KY", 3},
 	{"CN", "CN", 38},
 	{"CO", "CO", 17},
@@ -220,16 +219,15 @@ const struct cntry_locales_custom translate_custom_table[] = {
 	{"GR", "GR", 4},
 	{"GD", "GD", 2},
 	{"GP", "GP", 2},
-	{"GU", "GU", 12},
+	{"GU", "GU", 30},
 	{"HK", "HK", 2},
 	{"HU", "HU", 4},
 	{"IS", "IS", 4},
 	{"IN", "IN", 3},
 	{"ID", "ID", 1},
 	{"IE", "IE", 5},
-	{"IL", "IL", 7},
+	{"IL", "IL", 14},
 	{"IT", "IT", 4},
-	{"JP", "JP", 45},
 	{"JO", "JO", 3},
 	{"KE", "SA", 0},
 	{"KW", "KW", 5},
@@ -240,7 +238,7 @@ const struct cntry_locales_custom translate_custom_table[] = {
 	{"LI", "LI", 4},
 	{"LT", "LT", 4},
 	{"LU", "LU", 3},
-	{"MO", "MO", 2},
+	{"MO", "SG", 0},
 	{"MK", "MK", 2},
 	{"MW", "MW", 1},
 	{"MY", "MY", 3},
@@ -250,12 +248,11 @@ const struct cntry_locales_custom translate_custom_table[] = {
 	{"MR", "MR", 2},
 	{"MU", "MU", 2},
 	{"YT", "YT", 2},
-	{"MX", "MX", 20},
+	{"MX", "MX", 44},
 	{"MD", "MD", 2},
 	{"MC", "MC", 1},
 	{"ME", "ME", 2},
 	{"MA", "MA", 2},
-	{"NP", "ID", 5},
 	{"NL", "NL", 4},
 	{"AN", "GD", 2},
 	{"NZ", "NZ", 4},
@@ -268,7 +265,7 @@ const struct cntry_locales_custom translate_custom_table[] = {
 	{"PH", "PH", 5},
 	{"PL", "PL", 4},
 	{"PT", "PT", 4},
-	{"PR", "PR", 20},
+	{"PR", "PR", 38},
 	{"RE", "RE", 2},
 	{"RO", "RO", 4},
 	{"SN", "MA", 2},
@@ -282,26 +279,49 @@ const struct cntry_locales_custom translate_custom_table[] = {
 	{"TW", "TW", 1},
 	{"TH", "TH", 5},
 	{"TT", "TT", 3},
+#if defined(DHD_SUPPORT_TR_212)
+	{"TR", "TR", 212},
+#else
 	{"TR", "TR", 7},
+#endif
 	{"AE", "AE", 6},
-	{"UG", "UG", 2},
 	{"GB", "GB", 6},
-	{"UY", "UY", 1},
-	{"VI", "VI", 13},
+	{"UY", "VE", 3},
+	{"VI", "PR", 38},
 	{"VA", "VA", 2},
 	{"VE", "VE", 3},
 	{"VN", "VN", 4},
 	{"ZM", "LA", 2},
 	{"EC", "EC", 21},
 	{"SV", "SV", 25},
-	{"KR", "KR", 48},
+	{"KR", "KR", 70},
+#if defined(BCM4354_CHIP) || defined(BCM43454_CHIP) || defined(BCM43455_CHIP)
+	{"JP", "JP", 968},
+	{"RU", "RU", 986},
+	{"UA", "UA", 16},
+#else
+	{"JP", "JP", 45},
 	{"RU", "RU", 13},
 	{"UA", "UA", 8},
+#endif /* BCM4354_CHIP || BCM43454_CHIP || BCM43455_CHIP */
 	{"GT", "GT", 1},
-	{"FR", "FR", 5},
 	{"MN", "MN", 1},
 	{"NI", "NI", 2},
 	{"UZ", "MA", 2},
+	{"ZA", "ZA", 6},
+	{"EG", "EG", 13},
+	{"TN", "TN", 1},
+	{"AO", "AD", 0},
+	{"BT", "BJ", 0},
+	{"BW", "BJ", 0},
+	{"LY", "LI", 4},
+	{"BO", "NG", 0},
+	{"UM", "PR", 38},
+	/* Support FCC 15.407 (Part 15E) Changes, effective June 2 2014 */
+	/* US/988, Q2/993 country codes with higher power on UNII-1 5G band */
+	{"US", "US", 988},
+	{"CU", "US", 988},
+	{"CA", "Q2", 993},
 #endif /* default ccode/regrev */
 };
 
@@ -332,12 +352,15 @@ void get_customized_country_code(void *adapter, char *country_iso_code, wl_count
 	return;
 }
 
-#ifdef SLP_PATH
+#ifdef PLATFORM_SLP
 #define CIDINFO "/opt/etc/.cid.info"
 #define PSMINFO "/opt/etc/.psm.info"
 #define MACINFO "/opt/etc/.mac.info"
 #define MACINFO_EFS NULL
-#define	REVINFO "/data/.rev"
+#define REVINFO "/opt/etc/.rev"
+#define WIFIVERINFO "/opt/etc/.wifiver.info"
+#define ANTINFO "/opt/etc/.ant.info"
+#define WRMAC_BUF_SIZE 19
 #else
 #define MACINFO "/data/.mac.info"
 #define MACINFO_EFS "/efs/wifi/.mac.info"
@@ -345,7 +368,10 @@ void get_customized_country_code(void *adapter, char *country_iso_code, wl_count
 #define	REVINFO "/data/.rev"
 #define CIDINFO "/data/.cid.info"
 #define PSMINFO "/data/.psm.info"
-#endif /* SLP_PATH */
+#define WIFIVERINFO "/data/.wifiver.info"
+#define ANTINFO "/data/.ant.info"
+#define WRMAC_BUF_SIZE 18
+#endif /* PLATFORM_SLP */
 
 #ifdef BCM4330_CHIP
 #define CIS_BUF_SIZE            128
@@ -360,16 +386,14 @@ void get_customized_country_code(void *adapter, char *country_iso_code, wl_count
 #define CIS_TUPLE_TAG_MACADDR		0x19
 #define CIS_TUPLE_TAG_MACADDR_OFF	((TLV_BODY_OFF) + (1))
 
-#define MACBUFFER_SZ (sizeof("00:11:22:33:44:55\n"))
-
 #ifdef READ_MACADDR
 int dhd_read_macaddr(struct dhd_info *dhd, struct ether_addr *mac)
 {
 	struct file *fp      = NULL;
-	char macbuffer[MACBUFFER_SZ]   = {0};
+	char macbuffer[18]   = {0};
 	mm_segment_t oldfs   = {0};
 	char randommac[3]    = {0};
-	char buf[MACBUFFER_SZ]         = {0};
+	char buf[18]         = {0};
 	char *filepath_efs       = MACINFO_EFS;
 	int ret = 0;
 
@@ -394,7 +418,7 @@ start_readmac:
 
 		if (fp->f_mode & FMODE_WRITE) {
 			ret = fp->f_op->write(fp, (const char *)macbuffer,
-			sizeof(macbuffer) - 1 /* skip null byte */, &fp->f_pos);
+			sizeof(macbuffer), &fp->f_pos);
 			if (ret < 0)
 				DHD_ERROR(("[WIFI_SEC] MAC address [%s] Failed to write into File:"
 					" %s\n", macbuffer, filepath_efs));
@@ -462,7 +486,7 @@ int dhd_write_rdwr_macaddr(struct ether_addr *mac)
 	char *filepath_data = MACINFO;
 	char *filepath_efs = MACINFO_EFS;
 	struct file *fp_mac = NULL;
-	char buf[MACBUFFER_SZ]      = {0};
+	char buf[18]      = {0};
 	mm_segment_t oldfs    = {0};
 	int ret = -1;
 
@@ -484,7 +508,7 @@ int dhd_write_rdwr_macaddr(struct ether_addr *mac)
 
 		if (fp_mac->f_mode & FMODE_WRITE) {
 			ret = fp_mac->f_op->write(fp_mac, (const char *)buf,
-				sizeof(buf) - 1 /* skip null byte */, &fp_mac->f_pos);
+				sizeof(buf), &fp_mac->f_pos);
 			if (ret < 0)
 				DHD_ERROR(("[WIFI_SEC] Mac address [%s] Failed"
 				" to write into File: %s\n", buf, filepath_data));
@@ -506,7 +530,7 @@ int dhd_write_rdwr_macaddr(struct ether_addr *mac)
 
 		if (fp_mac->f_mode & FMODE_WRITE) {
 			ret = fp_mac->f_op->write(fp_mac, (const char *)buf,
-				sizeof(buf) - 1 /* skip null byte */, &fp_mac->f_pos);
+				sizeof(buf), &fp_mac->f_pos);
 			if (ret < 0)
 				DHD_ERROR(("[WIFI_SEC] Mac address [%s] Failed"
 				" to write into File: %s\n", buf, filepath_efs));
@@ -527,9 +551,9 @@ int dhd_check_rdwr_macaddr(struct dhd_info *dhd, dhd_pub_t *dhdp,
 {
 	struct file *fp_mac = NULL;
 	struct file *fp_nvm = NULL;
-	char macbuffer[MACBUFFER_SZ]    = {0};
+	char macbuffer[18]    = {0};
 	char randommac[3]   = {0};
-	char buf[MACBUFFER_SZ]      = {0};
+	char buf[18]      = {0};
 	char *filepath_data      = MACINFO;
 	char *filepath_efs      = MACINFO_EFS;
 #ifdef CONFIG_TARGET_LOCALE_NA
@@ -539,7 +563,7 @@ int dhd_check_rdwr_macaddr(struct dhd_info *dhd, dhd_pub_t *dhdp,
 #endif
 	char cur_mac[128]   = {0};
 	char dummy_mac[ETHER_ADDR_LEN] = {0x00, 0x90, 0x4C, 0xC5, 0x12, 0x38};
-	char cur_macbuffer[MACBUFFER_SZ]  = {0};
+	char cur_macbuffer[18]  = {0};
 	int ret = -1;
 
 	g_imac_flag = MACADDR_NONE;
@@ -733,10 +757,10 @@ int dhd_check_rdwr_macaddr(struct dhd_info *dhd, dhd_pub_t *dhdp,
 int dhd_write_rdwr_korics_macaddr(struct dhd_info *dhd, struct ether_addr *mac)
 {
 	struct file *fp      = NULL;
-	char macbuffer[MACBUFFER_SZ]   = {0};
+	char macbuffer[18]   = {0};
 	mm_segment_t oldfs   = {0};
 	char randommac[3]    = {0};
-	char buf[MACBUFFER_SZ]         = {0};
+	char buf[18]         = {0};
 	char *filepath_efs       = MACINFO_EFS;
 	int is_zeromac       = 0;
 	int ret = 0;
@@ -769,7 +793,7 @@ int dhd_write_rdwr_korics_macaddr(struct dhd_info *dhd, struct ether_addr *mac)
 		if (fp->f_mode & FMODE_WRITE) {
 			ret = fp->f_op->write(fp,
 				(const char *)macbuffer,
-				sizeof(macbuffer) - 1 /* skip null byte */, &fp->f_pos);
+				sizeof(macbuffer), &fp->f_pos);
 			if (ret < 0)
 				DHD_ERROR(("[WIFI_SEC] Mac address [%s]"
 					" Failed to write into File:"
@@ -867,7 +891,7 @@ static void dhd_dump_cis(const unsigned char *buf, int size)
 	int i;
 	for (i = 0; i < size; i++) {
 		DHD_ERROR(("%02X ", buf[i]));
-		if ((i % 15) == 15) DHD_ERROR(("\n")); /* FIXME: Will always be false */
+		if ((i % 15) == 15) DHD_ERROR(("\n"));
 	}
 	DHD_ERROR(("\n"));
 }
@@ -886,6 +910,12 @@ typedef struct {
 vid_info_t vid_info[] = {
 	{ 6, { 0x00, 0x20, 0xc7, 0x00, 0x00, }, { "murata" } },
 	{ 2, { 0x99, }, { "semcove" } },
+	{ 0, { 0x00, }, { "samsung" } }
+};
+#elif defined(BCM43430_CHIP)
+vid_info_t vid_info[] = {
+	{ 3, { 0x33, 0x33, }, { "semco" } },
+	{ 3, { 0x00, 0x22, }, { "murata" } },
 	{ 0, { 0x00, }, { "samsung" } }
 };
 #elif defined(BCM4334_CHIP)
@@ -1188,7 +1218,7 @@ int dhd_write_macaddr(struct ether_addr *mac)
 	char *filepath_efs      = MACINFO_EFS;
 
 	struct file *fp_mac = NULL;
-	char buf[MACBUFFER_SZ]   = {0};
+	char buf[WRMAC_BUF_SIZE]      = {0};
 	mm_segment_t oldfs    = {0};
 	int ret = -1;
 	int retry_count = 0;
@@ -1211,7 +1241,7 @@ startwrite:
 
 		if (fp_mac->f_mode & FMODE_WRITE) {
 			ret = fp_mac->f_op->write(fp_mac, (const char *)buf,
-				sizeof(buf) - 1 /* skip null byte */, &fp_mac->f_pos);
+				sizeof(buf), &fp_mac->f_pos);
 			if (ret < 0)
 				DHD_ERROR(("[WIFI_SEC] Mac address [%s] Failed to"
 				" write into File: %s\n", buf, filepath_data));
@@ -1251,7 +1281,7 @@ startwrite:
 
 		if (fp_mac->f_mode & FMODE_WRITE) {
 			ret = fp_mac->f_op->write(fp_mac, (const char *)buf,
-				sizeof(buf) - 1 /* skip null byte */, &fp_mac->f_pos);
+				sizeof(buf), &fp_mac->f_pos);
 			if (ret < 0)
 				DHD_ERROR(("[WIFI_SEC] Mac address [%s] Failed to"
 				" write into File: %s\n", buf, filepath_efs));
@@ -1354,13 +1384,14 @@ int dhd_sel_ant_from_file(dhd_pub_t *dhd)
 	int ret = -1;
 	uint32 ant_val = 0;
 	uint32 btc_mode = 0;
-	char *filepath = "/data/.ant.info";
+	char *filepath = ANTINFO;
 	char iovbuf[WLC_IOCTL_SMLEN];
 	uint chip_id = dhd_bus_chip_id(dhd);
 
 	/* Check if this chip can support MIMO */
 	if (chip_id != BCM4324_CHIP_ID &&
 		chip_id != BCM4350_CHIP_ID &&
+		chip_id != BCM4356_CHIP_ID &&
 		chip_id != BCM4354_CHIP_ID) {
 		DHD_ERROR(("[WIFI_SEC] %s: This chipset does not support MIMO\n",
 			__FUNCTION__));
@@ -1427,16 +1458,16 @@ int dhd_sel_ant_from_file(dhd_pub_t *dhd)
 #endif /* MIMO_ANTENNA_SETTING */
 
 #ifdef USE_WFA_CERT_CONF
-int sec_get_param(dhd_pub_t *dhd, int mode)
+int sec_get_param_wfa_cert(dhd_pub_t *dhd, int mode, uint* read_val)
 {
 	struct file *fp = NULL;
 	char *filepath = NULL;
-	int val, ret = 0;
+	int val = 0;
 
 	if (!dhd || (mode < SET_PARAM_BUS_TXGLOM_MODE) ||
 		(mode >= PARAM_LAST_VALUE)) {
 		DHD_ERROR(("[WIFI_SEC] %s: invalid argument\n", __FUNCTION__));
-		return -EINVAL;
+		return BCME_ERROR;
 	}
 
 	switch (mode) {
@@ -1456,53 +1487,34 @@ int sec_get_param(dhd_pub_t *dhd, int mode)
 			filepath = "/data/.txbf.info";
 			break;
 #endif /* USE_WL_TXBF */
+#ifdef PROP_TXSTATUS
+		case SET_PARAM_PROPTX:
+			filepath = "/data/.proptx.info";
+			break;
+#endif /* PROP_TXSTATUS */
 		default:
-			return -EINVAL;
+			DHD_ERROR(("[WIFI_SEC] %s: File to find file name for index=%d\n",
+				__FUNCTION__, mode));
+			return BCME_ERROR;
 	}
 
 	fp = filp_open(filepath, O_RDONLY, 0);
 	if (IS_ERR(fp) || (fp == NULL)) {
-		ret = -EIO;
+		DHD_ERROR(("[WIFI_SEC] %s: File [%s] doesn't exist \n",
+			__FUNCTION__, filepath));
+		return BCME_ERROR;
 	} else {
-		ret = kernel_read(fp, fp->f_pos, (char *)&val, 4);
+		if (kernel_read(fp, fp->f_pos, (char *)&val, 4) < 0) {
+			filp_close(fp, NULL);
+			/* File operation is failed so we will return error code */
+			DHD_ERROR(("[WIFI_SEC] %s: read failed, file path=%s\n",
+				__FUNCTION__, filepath));
+			return BCME_ERROR;
+		}
 		filp_close(fp, NULL);
 	}
 
-	if (ret < 0) {
-		/* File operation is failed so we will return default value */
-		switch (mode) {
-			case SET_PARAM_BUS_TXGLOM_MODE:
-				val = CUSTOM_GLOM_SETTING;
-				break;
-			case SET_PARAM_ROAMOFF:
-#ifdef ROAM_ENABLE
-				val = 0;
-#elif defined(DISABLE_BUILTIN_ROAM)
-				val = 1;
-#else
-				val = 0;
-#endif /* ROAM_ENABLE */
-				break;
-#ifdef USE_WL_FRAMEBURST
-			case SET_PARAM_FRAMEBURST:
-				val = 1;
-				break;
-#endif /* USE_WL_FRAMEBURST */
-#ifdef USE_WL_TXBF
-			case SET_PARAM_TXBF:
-				val = 1;
-				break;
-#endif /* USE_WL_TXBF */
-		}
-
-		DHD_INFO(("[WIFI_SEC] %s: File open failed, file path=%s,"
-			" default value=%d\n",
-			__FUNCTION__, filepath, val));
-		return val;
-	}
-
 	val = bcm_atoi((char *)&val);
-	DHD_INFO(("[WIFI_SEC] %s: %s = %d\n", __FUNCTION__, filepath, val));
 
 	switch (mode) {
 		case SET_PARAM_ROAMOFF:
@@ -1512,11 +1524,20 @@ int sec_get_param(dhd_pub_t *dhd, int mode)
 #ifdef USE_WL_TXBF
 		case SET_PARAM_TXBF:
 #endif /* USE_WL_TXBF */
-			val = val ? 1 : 0;
+#ifdef PROP_TXSTATUS
+		case SET_PARAM_PROPTX:
+#endif /* PROP_TXSTATUS */
+		if (val < 0 || val > 1) {
+			DHD_ERROR(("[WIFI_SEC] %s: value[%d] is out of range\n",
+				__FUNCTION__, *read_val));
+			return BCME_ERROR;
+		}
 			break;
+		default:
+			return BCME_ERROR;
 	}
-
-	return val;
+	*read_val = (uint)val;
+	return BCME_OK;
 }
 #endif /* USE_WFA_CERT_CONF */
 #ifdef WRITE_WLANINFO
@@ -1548,7 +1569,7 @@ uint32 sec_save_wlinfo(char *firm_ver, char *dhd_ver, char *nvram_p)
 {
 	struct file *fp = NULL;
 	struct file *nvfp = NULL;
-	char *filepath = "/data/.wifiver.info";
+	char *filepath = WIFIVERINFO;
 	int min_len, str_len = 0;
 	int ret = 0;
 	char* nvram_buf;
@@ -1602,13 +1623,13 @@ uint32 sec_save_wlinfo(char *firm_ver, char *dhd_ver, char *nvram_p)
 		if (strlen(temp_buf)) {
 			nvram_buf = temp_buf;
 			bcmstrtok(&nvram_buf, "\n", 0);
-			DHD_INFO(("[WIFI_SEC] nvram tolkening : %s(%d) \n",
+			DHD_INFO(("[WIFI_SEC] nvram tolkening : %s(%zu) \n",
 				temp_buf, strlen(temp_buf)));
 			snprintf(version_info+str_len, tstr_len(temp_buf, NV_PREFIX),
 				NV_PREFIX " %s\n", temp_buf);
 			str_len = strlen(version_info);
 			DHD_INFO(("[WIFI_SEC] NVRAM version_info : %s\n", version_info));
-			DHD_INFO(("[WIFI_SEC] NVRAM version_info len : %d, nvram len : %d\n",
+			DHD_INFO(("[WIFI_SEC] NVRAM version_info len : %d, nvram len : %zu\n",
 				str_len, strlen(temp_buf)));
 		} else {
 			DHD_ERROR(("[WIFI_SEC] NVRAM info is missing.\n"));
@@ -1617,7 +1638,7 @@ uint32 sec_save_wlinfo(char *firm_ver, char *dhd_ver, char *nvram_p)
 		DHD_ERROR(("[WIFI_SEC] Not exist nvram path\n"));
 	}
 
-	DHD_INFO(("[WIFI_SEC] version_info : %s, strlen : %d\n",
+	DHD_INFO(("[WIFI_SEC] version_info : %s, strlen : %zu\n",
 		version_info, strlen(version_info)));
 
 	fp = filp_open(filepath, O_RDONLY, 0);
@@ -1647,4 +1668,16 @@ uint32 sec_save_wlinfo(char *firm_ver, char *dhd_ver, char *nvram_p)
 	return ret;
 }
 #endif /* WRITE_WLANINFO */
+
+#ifdef SUPPORT_MULTIPLE_BOARD_REV_FROM_HW
+unsigned int system_hw_rev;
+static int __init get_hw_rev(char *arg)
+{
+	get_option(&arg, &system_hw_rev);
+	printk("dhd : hw_rev : %d\n", system_hw_rev);
+	return 0;
+}
+
+early_param("androidboot.hw_rev", get_hw_rev);
+#endif /* SUPPORT_MULTIPLE_BOARD_REV_FROM_HW */
 #endif /* CUSTOMER_HW4 */
