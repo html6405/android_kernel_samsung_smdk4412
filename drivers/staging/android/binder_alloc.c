@@ -26,6 +26,7 @@
 #include <linux/seq_file.h>
 #include <linux/vmalloc.h>
 #include <linux/slab.h>
+#include <linux/mm.h> // for current->mm and struct vm_area_struct
 #include <linux/sched.h>
 #include <linux/err.h>
 #include "binder_alloc.h"
@@ -220,6 +221,18 @@ static int binder_update_page_range(struct binder_alloc *alloc, int allocate,
 	if (vma == NULL) {
 		pr_err("%d: binder_alloc_buf failed to map pages in userspace, no vma\n",
 			alloc->pid);
+        pr_info("binder_alloc: dumping VMAs for pid %d\n", current->pid);
+        if (current->mm) {
+            struct vm_area_struct *vma_iter;
+            for (vma_iter = current->mm->mmap; vma_iter; vma_iter = vma_iter->vm_next) {
+                pr_info("  VMA: 0x%08lx-0x%08lx flags=0x%lx\n",
+                vma_iter->vm_start,
+                vma_iter->vm_end,
+                vma_iter->vm_flags);
+            }
+        } else {
+            pr_warn("binder_alloc: current->mm is NULL\n");
+        }
 		goto err_no_vma;
 	}
 
@@ -301,6 +314,7 @@ struct binder_buffer *binder_alloc_new_buf_locked(struct binder_alloc *alloc,
 	if (alloc->vma == NULL) {
 		pr_err("%d: binder_alloc_buf, no vma\n",
 		       alloc->pid);
+        pr_err("binder: alloc_buf failed: no vma for pid %d\n", current->pid);
 		return ERR_PTR(-ESRCH);
 	}
 
