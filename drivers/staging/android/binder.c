@@ -5563,7 +5563,6 @@ static int binder_node_release(struct binder_node *node, int refs)
 		binder_inner_proc_unlock(ref->proc);
 	}
 
-out:
 	binder_debug(BINDER_DEBUG_DEAD_BINDER,
 		     "node %d now dead, refs %d, death %d\n",
 		     node->debug_id, refs, death);
