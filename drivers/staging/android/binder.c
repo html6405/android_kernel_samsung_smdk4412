@@ -78,6 +78,12 @@
 #include "binder_alloc.h"
 #include "binder_trace.h"
 
+#if defined(CONFIG_PM)
+#include <linux/pm.h>
+#include <linux/notifier.h>
+#include <linux/suspend.h>
+#endif
+
 static HLIST_HEAD(binder_deferred_list);
 static DEFINE_MUTEX(binder_deferred_lock);
 
@@ -5389,7 +5395,9 @@ static int binder_mmap(struct file *filp, struct vm_area_struct *vma)
 	ret = binder_alloc_mmap_handler(&proc->alloc, vma);
 	if (ret)
 		return ret;
-	
+
+    pr_info("binder: binder_mmap called by PID %d\n", current->pid);
+
 	return 0;
 
 err_bad_arg:
@@ -6270,6 +6278,48 @@ static int __init init_binder_device(const char *name)
 	return ret;
 }
 
+#if defined(CONFIG_PM)
+static void binder_resume_work_func(struct work_struct *work)
+{
+	struct binder_proc *proc;
+	struct hlist_node *tmp;
+    struct hlist_node *node;
+
+	pr_info("binder: deferred resume check running\n");
+
+     hlist_for_each_entry_safe(proc, tmp, node, &binder_procs, proc_node) {
+            pr_info("binder: resumed proc %d\n", proc->pid);
+            pr_info("binder: proc %d is_dead=%d, deferred_work=%d\n",
+            proc->pid, proc->is_dead, proc->deferred_work);
+        }
+}
+
+static DECLARE_WORK(binder_resume_work, binder_resume_work_func);
+
+static int binder_pm_notify(struct notifier_block *nb, unsigned long event, void *unused)
+{
+    pr_info("binder_pm_notify: event = %lu\n", event);
+	switch (event) {
+	case PM_SUSPEND_PREPARE:
+		pr_info("binder: preparing for suspend\n");
+		break;
+	case PM_POST_SUSPEND:
+		pr_info("binder: resumed from suspend, queuing deferred work\n");
+	    queue_work(system_wq, &binder_resume_work);
+		break;
+	default:
+         pr_info("binder: unhandled PM event: %lu\n", event);
+		break;
+	}
+	return NOTIFY_OK;
+}
+
+static struct notifier_block binder_nb = {
+	.notifier_call = binder_pm_notify,
+	.priority = 0,
+};
+#endif
+
 static int __init binder_init(void)
 {
 	int ret;
@@ -6333,6 +6383,15 @@ static int __init binder_init(void)
 		if (ret)
 			goto err_init_binder_device_failed;
 	}
+
+#ifdef CONFIG_PM
+    pr_info("binder: calling register_pm_notifier\n");
+    ret = register_pm_notifier(&binder_nb);
+	if (ret)
+		pr_err("binder: failed to register PM notifier\n");
+    else
+        pr_info("binder: pm notifier registered\n");
+#endif
 
 	return ret;
 
