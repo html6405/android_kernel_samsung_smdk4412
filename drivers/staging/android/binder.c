@@ -77,6 +77,7 @@
 #include "binder.h"
 #include "binder_alloc.h"
 #include "binder_trace.h"
+#include <linux/cpufreq.h>
 
 #if defined(CONFIG_PM)
 #include <linux/pm.h>
@@ -6309,7 +6310,12 @@ static int binder_pm_notify(struct notifier_block *nb, unsigned long event, void
 		break;
 	case PM_POST_SUSPEND:
 		pr_info("binder: resumed from suspend, queuing deferred work\n");
-	    queue_work(system_wq, &binder_resume_work);
+        unsigned int cpu;
+        pr_info("binder: boosting CPU frequencies after resume\n");
+        for_each_possible_cpu(cpu) {
+            cpufreq_update_policy(cpu);
+        }
+        queue_work(system_wq, &binder_resume_work);
 		break;
 	default:
          pr_info("binder: unhandled PM event: %lu\n", event);
