@@ -151,10 +151,12 @@ static struct binder_buffer *binder_alloc_prepare_to_free_locked(
 			 * free the buffer when in use by kernel or
 			 * after it's already been freed.
 			 */
-			if (!buffer->allow_user_free)
-				return ERR_PTR(-EPERM);
-			buffer->allow_user_free = 0;
-			return buffer;
+            if (!buffer->allow_user_free) {
+                pr_warn("%d: double free attempt or not user-free buffer: %pK\n", alloc->pid, buffer);
+                return ERR_PTR(-EPERM);
+            }
+            buffer->allow_user_free = 0;
+            return buffer;
 		}
 	}
 	return NULL;
@@ -317,7 +319,10 @@ struct binder_buffer *binder_alloc_new_buf_locked(struct binder_alloc *alloc,
         pr_err("binder: alloc_buf failed: no vma for pid %d\n", current->pid);
 		return ERR_PTR(-ESRCH);
 	}
-
+    if (!alloc->buffer) {
+        pr_err("%d: binder_alloc_buf, no buffer base\n", alloc->pid);
+        return ERR_PTR(-ENOMEM);
+    }
 	data_offsets_size = ALIGN(data_size, sizeof(void *)) +
 		ALIGN(offsets_size, sizeof(void *));
 
@@ -579,6 +584,12 @@ static void binder_free_buf_locked(struct binder_alloc *alloc,
 		(void *)PAGE_ALIGN((uintptr_t)buffer->data),
 		(void *)(((uintptr_t)buffer->data + buffer_size) & PAGE_MASK),
 		NULL);
+
+    if (buffer->free) {
+        pr_warn("binder: attempt to free already freed buffer %pK\n", buffer);
+        return;
+    }
+    buffer->free = true;
 
 	rb_erase(&buffer->rb_node, &alloc->allocated_buffers);
 	buffer->free = 1;
