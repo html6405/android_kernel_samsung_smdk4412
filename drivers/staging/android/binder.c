@@ -99,6 +99,7 @@ static struct dentry *binder_debugfs_dir_entry_root;
 static struct dentry *binder_debugfs_dir_entry_proc;
 static atomic_t binder_last_id;
 static struct workqueue_struct *binder_deferred_workqueue;
+static atomic_t binder_in_suspend = ATOMIC_INIT(0);
 
 #define BINDER_DEBUG_ENTRY(name) \
 static int binder_##name##_open(struct inode *inode, struct file *file) \
@@ -5585,6 +5586,11 @@ static void binder_deferred_release(struct binder_proc *proc)
 	struct rb_node *n;
 	int threads, nodes, incoming_refs, outgoing_refs, active_transactions;
 
+    if (atomic_read(&binder_in_suspend)) {
+        pr_info("binder: skipping deferred_release during suspend\n");
+        return;
+    }
+
 	mutex_lock(&binder_procs_lock);
 	hlist_del(&proc->proc_node);
 	mutex_unlock(&binder_procs_lock);
@@ -6306,10 +6312,12 @@ static int binder_pm_notify(struct notifier_block *nb, unsigned long event, void
     pr_info("binder_pm_notify: event = %lu\n", event);
 	switch (event) {
 	case PM_SUSPEND_PREPARE:
+        atomic_set(&binder_in_suspend, 1);
 		pr_info("binder: preparing for suspend\n");
 		break;
 	case PM_POST_SUSPEND:
 		pr_info("binder: resumed from suspend, queuing deferred work\n");
+        atomic_set(&binder_in_suspend, 0);
         unsigned int cpu;
         pr_info("binder: boosting CPU frequencies after resume\n");
         for_each_possible_cpu(cpu) {
