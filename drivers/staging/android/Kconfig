@@ -42,6 +42,14 @@ config ANDROID_BINDER_IPC_SELFTEST
           exhaustively with combinations of various buffer sizes and
           alignments.
 
+config BINDER_RESUME_WORKAROUND
+    bool "Enable Binder Resume Workaround after Suspend"
+    default n
+    help
+      Enable this if you want Binder to perform deferred cleanup tasks
+      for each process after suspend/resume. Can help avoid crashes
+      on devices with unstable binder states after resume.
+
 config ANDROID_LOGGER
 	tristate "Android log driver"
 	default n

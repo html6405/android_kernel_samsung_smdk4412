@@ -77,14 +77,21 @@
 #include "binder.h"
 #include "binder_alloc.h"
 #include "binder_trace.h"
-#include <linux/cpufreq.h>
 
-#if defined(CONFIG_PM)
+#if defined(CONFIG_BINDER_RESUME_WORKAROUND)
 #include <linux/pm.h>
 #include <linux/notifier.h>
 #include <linux/suspend.h>
+#include <linux/cpufreq.h>
+static void binder_resume_work_func(struct work_struct *work);
+static DECLARE_WORK(binder_resume_work, binder_resume_work_func);
+static int binder_pm_notify(struct notifier_block *nb, unsigned long event, void *unused);
+static struct notifier_block binder_nb = {
+	.notifier_call = binder_pm_notify,
+	.priority = 0,
+};
 #endif
-
+static atomic_t binder_in_suspend = ATOMIC_INIT(0);
 static HLIST_HEAD(binder_deferred_list);
 static DEFINE_MUTEX(binder_deferred_lock);
 
@@ -99,7 +106,6 @@ static struct dentry *binder_debugfs_dir_entry_root;
 static struct dentry *binder_debugfs_dir_entry_proc;
 static atomic_t binder_last_id;
 static struct workqueue_struct *binder_deferred_workqueue;
-static atomic_t binder_in_suspend = ATOMIC_INIT(0);
 
 #define BINDER_DEBUG_ENTRY(name) \
 static int binder_##name##_open(struct inode *inode, struct file *file) \
@@ -6289,7 +6295,7 @@ static int __init init_binder_device(const char *name)
 	return ret;
 }
 
-#if defined(CONFIG_PM)
+#ifdef CONFIG_BINDER_RESUME_WORKAROUND
 static void binder_resume_work_func(struct work_struct *work)
 {
 	struct binder_proc *proc;
@@ -6305,8 +6311,6 @@ static void binder_resume_work_func(struct work_struct *work)
         }
 }
 
-static DECLARE_WORK(binder_resume_work, binder_resume_work_func);
-
 static int binder_pm_notify(struct notifier_block *nb, unsigned long event, void *unused)
 {
     pr_info("binder_pm_notify: event = %lu\n", event);
@@ -6319,23 +6323,18 @@ static int binder_pm_notify(struct notifier_block *nb, unsigned long event, void
 		pr_info("binder: resumed from suspend, queuing deferred work\n");
         atomic_set(&binder_in_suspend, 0);
         unsigned int cpu;
+        queue_work(system_wq, &binder_resume_work);
         pr_info("binder: boosting CPU frequencies after resume\n");
         for_each_possible_cpu(cpu) {
             cpufreq_update_policy(cpu);
         }
-        queue_work(system_wq, &binder_resume_work);
-		break;
+        break;
 	default:
          pr_info("binder: unhandled PM event: %lu\n", event);
 		break;
 	}
 	return NOTIFY_OK;
 }
-
-static struct notifier_block binder_nb = {
-	.notifier_call = binder_pm_notify,
-	.priority = 0,
-};
 #endif
 
 static int __init binder_init(void)
@@ -6402,7 +6401,7 @@ static int __init binder_init(void)
 			goto err_init_binder_device_failed;
 	}
 
-#ifdef CONFIG_PM
+#ifdef CONFIG_BINDER_RESUME_WORKAROUND
     pr_info("binder: calling register_pm_notifier\n");
     ret = register_pm_notifier(&binder_nb);
 	if (ret)
