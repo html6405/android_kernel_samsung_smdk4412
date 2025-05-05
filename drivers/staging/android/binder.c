@@ -6324,6 +6324,7 @@ static void binder_resume_work_func(struct work_struct *work)
 static int binder_pm_notify(struct notifier_block *nb, unsigned long event, void *unused)
 {
     pr_info("binder_pm_notify: event = %lu\n", event);
+    unsigned int cpu;
 	switch (event) {
 	case PM_SUSPEND_PREPARE:
         atomic_set(&binder_in_suspend, 1);
@@ -6332,7 +6333,6 @@ static int binder_pm_notify(struct notifier_block *nb, unsigned long event, void
 	case PM_POST_SUSPEND:
 		pr_info("binder: resumed from suspend, queuing deferred work\n");
         atomic_set(&binder_in_suspend, 0);
-        unsigned int cpu;
         queue_work(system_wq, &binder_resume_work);
         pr_info("binder: boosting CPU frequencies after resume\n");
         for_each_possible_cpu(cpu) {
