@@ -247,8 +247,12 @@ int s3c_adc_read(struct s3c_adc_client *client, unsigned int ch)
 		dev_warn(&adc_dev->pdev->dev, "%s: %p is timed out\n",
 			 __func__, client);
 		++client->error_count;
-		BUG_ON(client->error_count > 10);
-		ret = -ETIMEDOUT;
+        if (client->error_count > 10) {
+            dev_err(&adc_dev->pdev->dev, "%s: %p exceeded error threshold, skipping ADC read\n", __func__, client);
+            ret = -ETIMEDOUT;
+            goto err;
+        }
+        ret = -ETIMEDOUT;
 		goto err;
 	} else {
 		client->error_count = 0;
