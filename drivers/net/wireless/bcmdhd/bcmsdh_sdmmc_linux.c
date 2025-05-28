@@ -175,7 +175,13 @@ static int bcmsdh_sdmmc_probe(struct sdio_func *func,
 	sd_info(("sdio_device: 0x%04x\n", func->device));
 	sd_info(("Function#: 0x%04x\n", func->num));
 
-	/* 4318 doesn't have function 2 */
+    if (func && func->dev.parent) {
+        device_init_wakeup(&func->dev, true);
+        device_set_wakeup_enable(&func->dev, true);
+        pr_info("bcmsdh_sdmmc: Wi-Fi wakeup source enabled\n");
+    }
+
+    /* 4318 doesn't have function 2 */
 	if ((func->num == 2) || (func->num == 1 && func->device == 0x4))
 		ret = sdioh_probe(func);
 
