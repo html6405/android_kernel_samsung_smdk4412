@@ -3025,6 +3025,9 @@ static int __devinit mms_ts_probe(struct i2c_client *client,
 #endif
 
 	i2c_set_clientdata(client, info);
+    device_init_wakeup(&client->dev, true);
+    device_set_wakeup_enable(&client->dev, true);
+
 	info->pdata->power(true);
 	msleep(100);
 
