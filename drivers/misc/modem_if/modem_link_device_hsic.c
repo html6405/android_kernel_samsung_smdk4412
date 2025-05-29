@@ -835,9 +835,7 @@ static irqreturn_t link_pm_irq_handler(int irq, void *data)
 	int value;
 	struct link_pm_data *pm_data = data;
 
-#if defined(CONFIG_SLP)
 	pm_wakeup_event(pm_data->miscdev.this_device, 0);
-#endif
 
 	if (!pm_data->link_pm_active)
 		return IRQ_HANDLED;
@@ -1036,9 +1034,7 @@ static int if_usb_suspend(struct usb_interface *intf, pm_message_t message)
 	if (devdata->usb_ld->suspended == LINKPM_DEV_NUM) {
 		mif_debug("[if_usb_suspended]\n");
 		wake_lock_timeout(&pm_data->l2_wake, msecs_to_jiffies(50));
-#ifdef	CONFIG_SLP
 		pm_wakeup_event(pm_data->miscdev.this_device, 20);
-#endif
 		/* XMM6262 Host wakeup toggle recovery */
 		if (!pm_data->rx_cnt && !pm_data->tx_cnt) {
 			if (pm_data->ipc_debug_cnt++ > 10) {
@@ -1518,9 +1514,8 @@ static int usb_link_pm_init(struct usb_link_device *usb_ld, void *data)
 	wake_lock_init(&pm_data->rpm_wake, WAKE_LOCK_SUSPEND, "rpm_hsic");
 	wake_lock_init(&pm_data->tx_async_wake, WAKE_LOCK_SUSPEND, "tx_hsic");
 
-#if defined(CONFIG_SLP)
 	device_init_wakeup(pm_data->miscdev.this_device, true);
-#endif
+    device_set_wakeup_enable(pm_data->miscdev.this_device, true);
 
 	return 0;
 
