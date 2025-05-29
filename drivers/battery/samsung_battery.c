@@ -2438,6 +2438,9 @@ gpio_bat_det_finish:
 
 	pr_info("%s: probe complete\n", __func__);
 
+    device_init_wakeup(&pdev->dev, true);
+    device_set_wakeup_enable(&pdev->dev, true);
+
 	return 0;
 
 err_enable_irq:
