@@ -174,8 +174,9 @@ static int max77693_i2c_probe(struct i2c_client *i2c,
 		goto err_mfd;
 
 	device_init_wakeup(max77693->dev, pdata->wakeup);
+    device_set_wakeup_enable(max77693->dev, true);
 
-	return ret;
+    return ret;
 
 err_mfd:
 	mfd_remove_devices(max77693->dev);
