@@ -796,6 +796,8 @@ static int rfkill_suspend(struct device *dev, pm_message_t state)
 
 	rfkill_pause_polling(rfkill);
 
+    pr_info("rfkill_suspend: called\n");
+
 	return 0;
 }
 
@@ -810,6 +812,8 @@ static int rfkill_resume(struct device *dev)
 	}
 
 	rfkill_resume_polling(rfkill);
+
+    pr_info("rfkill_resume: called\n");
 
 	return 0;
 }
