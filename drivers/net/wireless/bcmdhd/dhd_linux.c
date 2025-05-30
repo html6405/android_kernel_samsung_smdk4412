@@ -1013,7 +1013,13 @@ static int dhd_set_suspend(int value, dhd_pub_t *dhd)
 	if (!dhd)
 		return -ENODEV;
 
-	DHD_TRACE(("%s: enter, value = %d in_suspend=%d\n",
+    if (!dhd->up) {
+        DHD_ERROR(("%s: dhd->up is false, skipping suspend!\n", __func__));
+        dhd_suspend_unlock(dhd);
+        return -EINVAL;
+    }
+
+    DHD_TRACE(("%s: enter, value = %d in_suspend=%d\n",
 		__FUNCTION__, value, dhd->in_suspend));
 
 	dhd_suspend_lock(dhd);
