@@ -25,6 +25,8 @@
 #include <linux/posix-timers.h>
 #include <linux/workqueue.h>
 #include <linux/freezer.h>
+#include <linux/stacktrace.h>
+#include <linux/cred.h>
 
 #define ALARM_DELTA 300
 
@@ -238,6 +240,19 @@ static inline void alarmtimer_rtc_timer_init(void) { }
 void set_power_on_alarm(long secs, bool enable) { }
 #endif
 
+#define ALARMTIMER_STACK_ENTRIES 16
+static void debug_print_stacktrace(void)
+{
+    unsigned long entries[ALARMTIMER_STACK_ENTRIES];
+    struct stack_trace trace = {
+            .max_entries = ALARMTIMER_STACK_ENTRIES,
+            .entries = entries,
+            .skip = 0,
+    };
+    save_stack_trace(&trace);
+    print_stack_trace(&trace, 0);
+}
+
 /**
  * alarmtimer_enqueue - Adds an alarm timer to an alarm_base timerqueue
  * @base: pointer to the base where the timer is being run
@@ -367,6 +382,10 @@ static int alarmtimer_suspend(struct device *dev)
 
 	if (ktime_to_ns(min) < 2 * NSEC_PER_SEC) {
 		__pm_wakeup_event(ws, 2 * MSEC_PER_SEC);
+        pr_info("alarmtimer: suspend blocked (PID: %d, COMM: %s, UID: %u, TGID: %u)\n",
+            current->pid, current->comm,
+            from_kuid(&init_user_ns, current_uid()), current->tgid);
+        debug_print_stacktrace();
 		return -EBUSY;
 	}
 
