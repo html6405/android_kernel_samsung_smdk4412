@@ -1110,7 +1110,7 @@ static int __devinit s5p_tmu_probe(struct platform_device *pdev)
 
 	info->dev = &pdev->dev;
 	info->tmu_state = TMU_STATUS_INIT;
-
+    device_init_wakeup(&pdev->dev, true);
 	/* set cpufreq limit level at 1st_throttle & 2nd throttle */
 	pdata = info->dev->platform_data;
 	if (pdata->cpufreq.limit_1st_throttle)
@@ -1244,6 +1244,8 @@ static int __devinit s5p_tmu_probe(struct platform_device *pdev)
 	if (ret)
 		goto err_init;
 
+    device_set_wakeup_enable(&pdev->dev, true);
+
 #ifdef CONFIG_TMU_SYSFS
 	ret = device_create_file(&pdev->dev, &dev_attr_curr_temp);
 	if (ret < 0) {
@@ -1279,7 +1281,7 @@ static int __devinit s5p_tmu_probe(struct platform_device *pdev)
 	queue_delayed_work_on(0, tmu_monitor_wq, &info->polling,
 		info->sampling_rate);
 
-	return ret;
+    return ret;
 
 err_init:
 	device_remove_file(&pdev->dev, &dev_attr_lot_id);
