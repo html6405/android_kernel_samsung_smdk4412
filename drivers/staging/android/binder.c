@@ -3830,19 +3830,12 @@ static int binder_thread_write(struct binder_proc *proc,
 		case BC_FREE_BUFFER: {
             int bc_free = atomic_read(&proc->stats.bc[BC_FREE_BUFFER]);
 
-            if (proc && proc->tsk) {
-                int bc_free = atomic_read(&proc->stats.bc[BC_FREE_BUFFER]);
-
-                if (bc_free > 100000) {
-                    int delay = (bc_free > 150000) ? 10 :
-                                (bc_free > 120000) ? 5 : 2;
-
-                    pr_info("binder: throttling BC_FREE_BUFFER (PID=%d COMM=%s) bc=%d delay=%dms\n",
-                            current->pid, current->comm, bc_free, delay);
-
-                    msleep(delay);
-                }
-            }
+            if (bc_free > 150000)
+                msleep(10);
+            else if (bc_free > 120000)
+                msleep(5);
+            else if (bc_free > 100000)
+                msleep(2);
 
 			binder_uintptr_t data_ptr;
 			struct binder_buffer *buffer;
