@@ -54,7 +54,6 @@
 #include <asm/cacheflush.h>
 #include <linux/fdtable.h>
 #include <linux/file.h>
-#include <linux/delay.h>
 #include <linux/freezer.h>
 #include <linux/fs.h>
 #include <linux/list.h>
@@ -3828,15 +3827,6 @@ static int binder_thread_write(struct binder_proc *proc,
 			return -EINVAL;
 
 		case BC_FREE_BUFFER: {
-            int bc_free = atomic_read(&proc->stats.bc[BC_FREE_BUFFER]);
-
-            if (bc_free > 150000)
-                msleep(10);
-            else if (bc_free > 120000)
-                msleep(5);
-            else if (bc_free > 100000)
-                msleep(2);
-
 			binder_uintptr_t data_ptr;
 			struct binder_buffer *buffer;
 
