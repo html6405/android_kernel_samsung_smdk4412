@@ -1006,7 +1006,7 @@ static int dhd_set_suspend(int value, dhd_pub_t *dhd)
 
 #ifdef DYNAMIC_SWOOB_DURATION
 #ifndef CUSTOM_INTR_WIDTH
-#define CUSTOM_INTR_WIDTH 100
+#define CUSTOM_INTR_WIDTH 300
 #endif /* CUSTOM_INTR_WIDTH */
 	int intr_width = 0;
 #endif /* DYNAMIC_SWOOB_DURATION */
@@ -1022,6 +1022,8 @@ static int dhd_set_suspend(int value, dhd_pub_t *dhd)
     DHD_TRACE(("%s: enter, value = %d in_suspend=%d\n",
 		__FUNCTION__, value, dhd->in_suspend));
 
+    DHD_ERROR(("======== %s (value=%d, in_suspend=%d) ========\n", __func__, value, dhd->in_suspend));
+
 	dhd_suspend_lock(dhd);
 
 #ifdef CUSTOM_SET_CPUCORE
@@ -1033,13 +1035,17 @@ static int dhd_set_suspend(int value, dhd_pub_t *dhd)
 		if (value && dhd->in_suspend) {
 #ifdef PKT_FILTER_SUPPORT
 				dhd->early_suspended = 1;
+                DHD_ERROR(("early_suspended = %d\n", dhd->early_suspended));
 #endif
 				/* Kernel suspended */
 				DHD_ERROR(("%s: force extra Suspend setting \n", __FUNCTION__));
 
 #ifndef SUPPORT_PM2_ONLY
-				dhd_wl_ioctl_cmd(dhd, WLC_SET_PM, (char *)&power_mode,
-				                 sizeof(power_mode), TRUE, 0);
+            ret = dhd_wl_ioctl_cmd(dhd, WLC_SET_PM, (char *)&power_mode, sizeof(power_mode), TRUE, 0);
+            if (ret < 0) {
+                DHD_ERROR(("%s: WLC_SET_PM failed with %d\n", __func__, ret));
+            }
+
 #endif /* SUPPORT_PM2_ONLY */
 
 				/* Enable packet filter, only allow unicast packet to send up */
@@ -1060,12 +1066,17 @@ static int dhd_set_suspend(int value, dhd_pub_t *dhd)
 				 * each third DTIM for better power savings.  Note that
 				 * one side effect is a chance to miss BC/MC packet.
 				 */
-				bcn_li_dtim = dhd_get_suspend_bcn_li_dtim(dhd);
-				bcm_mkiovar("bcn_li_dtim", (char *)&bcn_li_dtim,
-					4, iovbuf, sizeof(iovbuf));
-				if (dhd_wl_ioctl_cmd(dhd, WLC_SET_VAR, iovbuf, sizeof(iovbuf),
-					TRUE, 0) < 0)
-					DHD_ERROR(("%s: set dtim failed\n", __FUNCTION__));
+            bcn_li_dtim = dhd_get_suspend_bcn_li_dtim(dhd);
+            if (bcn_li_dtim > 3) {
+                DHD_ERROR(("clamping bcn_li_dtim from %d to 3\n", bcn_li_dtim));
+                bcn_li_dtim = 3;
+            }
+
+            bcm_mkiovar("bcn_li_dtim", (char *)&bcn_li_dtim, 4, iovbuf, sizeof(iovbuf));
+            ret = dhd_wl_ioctl_cmd(dhd, WLC_SET_VAR, iovbuf, sizeof(iovbuf), TRUE, 0);
+            if (ret < 0) {
+                DHD_ERROR(("%s: setting bcn_li_dtim failed with %d\n", __func__, ret));
+            }
 
 #ifdef CUSTOM_BCN_TIMEOUT_IN_SUSPEND
 				bcn_timeout = CUSTOM_BCN_TIMEOUT_IN_SUSPEND;
@@ -1081,9 +1092,12 @@ static int dhd_set_suspend(int value, dhd_pub_t *dhd)
 #endif /* CUSTOM_ROAM_TIME_THRESH_IN_SUSPEND */
 #ifndef ENABLE_FW_ROAM_SUSPEND
 				/* Disable firmware roaming during suspend */
-				bcm_mkiovar("roam_off", (char *)&roamvar, 4,
-					iovbuf, sizeof(iovbuf));
-				dhd_wl_ioctl_cmd(dhd, WLC_SET_VAR, iovbuf, sizeof(iovbuf), TRUE, 0);
+            bcm_mkiovar("roam_off", (char *)&roamvar, 4, iovbuf, sizeof(iovbuf));
+            ret = dhd_wl_ioctl_cmd(dhd, WLC_SET_VAR, iovbuf, sizeof(iovbuf), TRUE, 0);
+            if (ret < 0) {
+                DHD_ERROR(("%s: setting roam_off failed with %d\n", __func__, ret));
+            }
+
 #endif /* ENABLE_FW_ROAM_SUSPEND */
 #if defined(CUSTOMER_HW4) && defined(ENABLE_BCN_LI_BCN_WAKEUP)
 				bcn_li_bcn = 0;
@@ -1094,12 +1108,11 @@ static int dhd_set_suspend(int value, dhd_pub_t *dhd)
 				if (FW_SUPPORTED(dhd, ndoe)) {
 					/* enable IPv6 RA filter in  firmware during suspend */
 					nd_ra_filter = 1;
-					bcm_mkiovar("nd_ra_filter_enable", (char *)&nd_ra_filter, 4,
-						iovbuf, sizeof(iovbuf));
-					if ((ret = dhd_wl_ioctl_cmd(dhd, WLC_SET_VAR, iovbuf,
-						sizeof(iovbuf), TRUE, 0)) < 0)
-						DHD_ERROR(("failed to set nd_ra_filter (%d)\n",
-							ret));
+                    bcm_mkiovar("nd_ra_filter_enable", (char *)&nd_ra_filter, 4, iovbuf, sizeof(iovbuf));
+                    ret = dhd_wl_ioctl_cmd(dhd, WLC_SET_VAR, iovbuf, sizeof(iovbuf), TRUE, 0);
+                    if (ret < 0) {
+                        DHD_ERROR(("%s: setting nd_ra_filter failed with %d\n", __func__, ret));
+                    }
 				}
 #ifdef DYNAMIC_SWOOB_DURATION
 				intr_width = CUSTOM_INTR_WIDTH;
@@ -1112,6 +1125,8 @@ static int dhd_set_suspend(int value, dhd_pub_t *dhd)
 			} else {
 #ifdef PKT_FILTER_SUPPORT
 				dhd->early_suspended = 0;
+                DHD_ERROR(("early_suspended = %d\n", dhd->early_suspended));
+
 #endif
 				/* Kernel resumed  */
 				DHD_ERROR(("%s: Remove extra suspend setting \n", __FUNCTION__));
@@ -1126,8 +1141,10 @@ static int dhd_set_suspend(int value, dhd_pub_t *dhd)
 
 #ifndef SUPPORT_PM2_ONLY
 				power_mode = PM_FAST;
-				dhd_wl_ioctl_cmd(dhd, WLC_SET_PM, (char *)&power_mode,
-				                 sizeof(power_mode), TRUE, 0);
+            ret = dhd_wl_ioctl_cmd(dhd, WLC_SET_PM, (char *)&power_mode, sizeof(power_mode), TRUE, 0);
+            if (ret < 0) {
+                DHD_ERROR(("%s: WLC_SET_PM failed with %d\n", __func__, ret));
+            }
 #endif /* SUPPORT_PM2_ONLY */
 #ifdef PKT_FILTER_SUPPORT
 				/* disable pkt filter */
@@ -1144,11 +1161,13 @@ static int dhd_set_suspend(int value, dhd_pub_t *dhd)
 				}
 #endif /* PASS_ALL_MCAST_PKTS && CUSTOMER_HW4 */
 
-				/* restore pre-suspend setting for dtim_skip */
-				bcm_mkiovar("bcn_li_dtim", (char *)&bcn_li_dtim,
-					4, iovbuf, sizeof(iovbuf));
+            bcm_mkiovar("bcn_li_dtim", (char *)&bcn_li_dtim, 4, iovbuf, sizeof(iovbuf));
+            ret = dhd_wl_ioctl_cmd(dhd, WLC_SET_VAR, iovbuf, sizeof(iovbuf), TRUE, 0);
+            if (ret < 0) {
+                DHD_ERROR(("%s: setting bcn_li_dtim failed with %d\n", __func__, ret));
+            }
 
-				dhd_wl_ioctl_cmd(dhd, WLC_SET_VAR, iovbuf, sizeof(iovbuf), TRUE, 0);
+            dhd_wl_ioctl_cmd(dhd, WLC_SET_VAR, iovbuf, sizeof(iovbuf), TRUE, 0);
 #ifdef CUSTOM_BCN_TIMEOUT_IN_SUSPEND
 				bcn_timeout = CUSTOM_BCN_TIMEOUT;
 				bcm_mkiovar("bcn_timeout", (char *)&bcn_timeout,
@@ -1176,16 +1195,18 @@ static int dhd_set_suspend(int value, dhd_pub_t *dhd)
 				if (FW_SUPPORTED(dhd, ndoe)) {
 					/* disable IPv6 RA filter in  firmware during suspend */
 					nd_ra_filter = 0;
-					bcm_mkiovar("nd_ra_filter_enable", (char *)&nd_ra_filter, 4,
-						iovbuf, sizeof(iovbuf));
-					if ((ret = dhd_wl_ioctl_cmd(dhd, WLC_SET_VAR, iovbuf,
-						sizeof(iovbuf), TRUE, 0)) < 0)
-						DHD_ERROR(("failed to set nd_ra_filter (%d)\n",
-							ret));
-				}
+                    bcm_mkiovar("nd_ra_filter_enable", (char *)&nd_ra_filter, 4, iovbuf, sizeof(iovbuf));
+                    ret = dhd_wl_ioctl_cmd(dhd, WLC_SET_VAR, iovbuf, sizeof(iovbuf), TRUE, 0);
+                    if (ret < 0) {
+                        DHD_ERROR(("%s: setting nd_ra_filter failed with %d\n", __func__, ret));
+                    }
+
+                }
 			}
 	}
 	dhd_suspend_unlock(dhd);
+    DHD_ERROR(("dhd_set_suspend done (val=%d), suspend_disable=%d\n", value, dhd->suspend_disable_flag));
+    DHD_ERROR(("======== %s (value=%d, in_suspend=%d) ========\n", __func__, value, dhd->in_suspend));
 
 	return 0;
 }
@@ -5236,7 +5257,11 @@ dhd_preinit_ioctls(dhd_pub_t *dhd)
 	sec_control_pm(dhd, &power_mode);
 #else
 	/* Set PowerSave mode */
-	dhd_wl_ioctl_cmd(dhd, WLC_SET_PM, (char *)&power_mode, sizeof(power_mode), TRUE, 0);
+    ret = dhd_wl_ioctl_cmd(dhd, WLC_SET_PM, (char *)&power_mode, sizeof(power_mode), TRUE, 0);
+    if (ret < 0) {
+        DHD_ERROR(("%s: WLC_SET_PM failed with %d\n", __func__, ret));
+    }
+
 #endif /* CUSTOMER_HW4 && CONFIG_CONTROL_PM */
 
 	/* Match Host and Dongle rx alignment */
