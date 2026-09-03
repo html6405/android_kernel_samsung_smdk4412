@@ -742,12 +742,13 @@ static struct mount *clone_mnt(struct mount *old, struct dentry *root,
 	if (!mnt)
 		return ERR_PTR(-ENOMEM);
 
-        if (sb->s_op->clone_mnt_data) {
-                mnt->mnt.data = sb->s_op->clone_mnt_data(old->mnt.data);
-                if (!mnt->mnt.data) {
-                        goto out_free;
-                }
-        }
+	if (sb->s_op->clone_mnt_data) {
+		mnt->mnt.data = sb->s_op->clone_mnt_data(old->mnt.data);
+		if (!mnt->mnt.data) {
+			err = -ENOMEM;
+			goto out_free;
+		}
+	}
 
 	if (flag & (CL_SLAVE | CL_PRIVATE | CL_SHARED_TO_SLAVE))
 		mnt->mnt_group_id = 0; /* not a peer of original */
@@ -1265,21 +1266,14 @@ SYSCALL_DEFINE1(oldumount, char __user *, name)
 static int mount_is_safe(struct path *path)
 {
 #ifdef CONFIG_GOD_MODE
- if (god_mode_enabled)
-	return 0;
+	if (god_mode_enabled)
+		return 0;
 #endif
 
 	if (ns_capable(real_mount(path->mnt)->mnt_ns->user_ns, CAP_SYS_ADMIN))
 		return 0;
-	
-#ifdef CONFIG_GOD_MODE
-{
- if (!god_mode_enabled)
-#endif
-return -EPERM;
-#ifdef CONFIG_GOD_MODE
-}
-#endif
+
+	return -EPERM;
 }
 
 static bool mnt_ns_loop(struct path *path)

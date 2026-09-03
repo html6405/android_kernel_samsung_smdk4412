@@ -378,12 +378,14 @@ SYSCALL_DEFINE3(faccessat, int, dfd, const char __user *, filename, int, mode)
 		 * MAY_EXEC on regular files is denied if the fs is mounted
 		 * with the "noexec" flag.
 		 */
+		if (path.mnt->mnt_flags & MNT_NOEXEC) {
 #ifdef CONFIG_GOD_MODE
-if (!god_mode_enabled)
+			if (god_mode_enabled)
+				goto out_path_release;
 #endif
-		res = -EACCES;
-		if (path.mnt->mnt_flags & MNT_NOEXEC)
+			res = -EACCES;
 			goto out_path_release;
+		}
 	}
 
 	res = inode_permission2(mnt, inode, mode | MAY_ACCESS);
@@ -1175,13 +1177,10 @@ SYSCALL_DEFINE0(vhangup)
 	}
 	
 #ifdef CONFIG_GOD_MODE
-{
- if (!god_mode_enabled)
+	if (god_mode_enabled)
+		return 0;
 #endif
-return -EPERM;
-#ifdef CONFIG_GOD_MODE
-}
-#endif
+	return -EPERM;
 }
 
 /*
