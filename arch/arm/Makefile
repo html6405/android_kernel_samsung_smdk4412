@@ -53,6 +53,11 @@ endif
 
 comma = ,
 
+# GCC's interprocedural SRA pass has historically miscompiled signed byte and
+# short members passed in ARM structures.  Keep the ABI-visible structure
+# layout intact for the old platform and graphics drivers.
+KBUILD_CFLAGS	+= $(call cc-option,-fno-ipa-sra)
+
 # This selects which instruction set is used.
 # Note that GCC does not numerically define an architecture version
 # macro, but instead defines a whole series of macros which makes
