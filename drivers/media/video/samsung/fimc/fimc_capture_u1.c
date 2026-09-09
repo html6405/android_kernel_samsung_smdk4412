@@ -25,6 +25,7 @@
 #include <plat/clock.h>
 #include <plat/fimc.h>
 #include <linux/delay.h>
+#include <linux/dma-mapping.h>
 #include <mach/cpufreq.h>
 
 #include <asm/cacheflush.h>
@@ -2139,9 +2140,7 @@ int fimc_dqbuf_capture(void *fh, struct v4l2_buffer *b)
 	struct fimc_control *ctrl = fh;
 	struct fimc_capinfo *cap = ctrl->cap;
 	struct fimc_buf_set *buf;
-	size_t length = 0;
 	int i, pp, ret = 0;
-	phys_addr_t start, end;
 
 	struct s3c_platform_fimc *pdata = to_fimc_plat(ctrl->dev);
 
@@ -2191,43 +2190,17 @@ int fimc_dqbuf_capture(void *fh, struct v4l2_buffer *b)
 	if (!cap->cacheable)
 		return ret;
 
+	/* Invalidate only completed FIMC capture planes. */
 	for (i = 0; i < 3; i++) {
-		if (cap->bufs[b->index].base[i])
-			length += cap->bufs[b->index].length[i];
-		else
+		phys_addr_t start = cap->bufs[b->index].base[i];
+		size_t plane_length = cap->bufs[b->index].length[i];
+
+		if (!start || !plane_length)
 			break;
-	}
 
-	if (length > (unsigned long) L2_FLUSH_ALL) {
-		flush_cache_all();      /* L1 */
-		smp_call_function((smp_call_func_t)__cpuc_flush_kern_all, NULL, 1);
-		outer_flush_all();      /* L2 */
-	} else if (length > (unsigned long) L1_FLUSH_ALL) {
-		flush_cache_all();      /* L1 */
-		smp_call_function((smp_call_func_t)__cpuc_flush_kern_all, NULL, 1);
-
-		for (i = 0; i < 3; i++) {
-			phys_addr_t start = cap->bufs[b->index].base[i];
-			phys_addr_t end   = cap->bufs[b->index].base[i] +
-					    cap->bufs[b->index].length[i] - 1;
-
-			if (!start)
-				break;
-
-			outer_flush_range(start, end);  /* L2 */
-		}
-	} else {
-		for (i = 0; i < 3; i++) {
-			phys_addr_t start = cap->bufs[b->index].base[i];
-			phys_addr_t end   = cap->bufs[b->index].base[i] +
-					    cap->bufs[b->index].length[i] - 1;
-
-			if (!start)
-				break;
-
-			dmac_flush_range(phys_to_virt(start), phys_to_virt(end));
-			outer_flush_range(start, end);  /* L2 */
-		}
+		dmac_unmap_area(phys_to_virt(start), plane_length,
+			DMA_FROM_DEVICE);
+		outer_inv_range(start, start + plane_length);
 	}
 
 	return ret;
@@ -2268,4 +2241,3 @@ int fimc_enum_frameintervals(struct file *filp, void *fh,
 
 	return 0;
 }
-
