@@ -331,12 +331,12 @@ void _ump_osk_msync( ump_dd_mem * mem, void * virt, u32 offset, u32 size, ump_uk
 		/* MALI_SEC */
 		start_v = (void *)virt;
 		end_v   = (void *)(start_v + size - 1);
-		/*  There is no dmac_clean_range, so the L1 is always flushed,
-		 *  also for UMP_MSYNC_CLEAN. */
-		if (size >= SZ_64K)
-			flush_all_cpu_caches();
+		if (op == _UMP_UK_MSYNC_CLEAN)
+			dmac_map_area(start_v, size, DMA_TO_DEVICE);
+		else if (op == _UMP_UK_MSYNC_INVALIDATE)
+			dmac_unmap_area(start_v, size, DMA_FROM_DEVICE);
 		else
-			dmac_flush_range(start_v, end_v);
+			dmac_map_area(start_v, size, DMA_BIDIRECTIONAL);
 
 		/* MALI ORIGINAL CODE */
 		//__cpuc_flush_dcache_area(virt, size);
@@ -387,20 +387,6 @@ void _ump_osk_msync( ump_dd_mem * mem, void * virt, u32 offset, u32 size, ump_uk
 	            mem->secure_id, mem->nr_blocks, mem->size_bytes, size, offset, mem->block_array[0].addr));
 	}
 
-
-	/* Flush L2 using physical addresses, block for block. */
-	/* MALI_SEC */
-	if ((virt!=NULL) && (mem->size_bytes >= SZ_1M)) {
-		if (op == _UMP_UK_MSYNC_CLEAN)
-#if 1
-			outer_clean_all();
-#else
-			outer_sync();
-#endif
-		else if ((op == _UMP_UK_MSYNC_INVALIDATE) || (op == _UMP_UK_MSYNC_CLEAN_AND_INVALIDATE))
-			outer_flush_all();
-		return;
-	}
 
 	for (i=0 ; i < mem->nr_blocks; i++)
 	{
