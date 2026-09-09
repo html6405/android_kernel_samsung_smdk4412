@@ -1529,12 +1529,13 @@ int mfc_init_encoding(struct mfc_inst_ctx *ctx, union mfc_args *args)
 		mfc_dbg("cache invalidate\n");
 	}
 #if defined(CONFIG_BUSFREQ)
-	/* Fix MFC & Bus Frequency for High resolution for better performance */
-	if (ctx->width >= MAX_HOR_RES || ctx->height >= MAX_VER_RES) {
+	/* Lock the fastest bus level for HD and FHD encoding. */
+	if ((ctx->width >= 1280 && ctx->height >= 720)
+		|| (ctx->width >= 720 && ctx->height >= 1280)) {
 		if (atomic_read(&ctx->dev->busfreq_lock_cnt) == 0) {
-			/* For fixed MFC & Bus Freq to 200 & 400 MHz for 1080p Contents */
 			exynos4_busfreq_lock(DVFS_LOCK_ID_MFC, BUS_L0);
-			mfc_dbg("[%s] Bus Freq Locked L0\n", __func__);
+			mfc_info("[%s] Bus Freq Locked L0 for %ux%u encode\n",
+				__func__, ctx->width, ctx->height);
 		}
 
 		atomic_inc(&ctx->dev->busfreq_lock_cnt);
@@ -1562,12 +1563,27 @@ int mfc_init_encoding(struct mfc_inst_ctx *ctx, union mfc_args *args)
 	if ((ctx->width >= 320 && ctx->height >= 240)
 		|| (ctx->width >= 240 && ctx->height >= 320)) {
 		if (atomic_read(&ctx->dev->cpufreq_lock_cnt) == 0) {
-			if (0 == ctx->dev->cpufreq_level) /* 500MHz */
+			/* Select the CPU level for each encoder session. */
+			if ((ctx->width >= 1920 && ctx->height >= 1080)
+				|| (ctx->width >= 1080 && ctx->height >= 1920)) {
+				exynos_cpufreq_get_level(1000000,
+						&ctx->dev->cpufreq_level);
+				mfc_info("[%s] CPU Freq Locked 1000MHz for %ux%u encode\n",
+					__func__, ctx->width, ctx->height);
+			} else if ((ctx->width >= 1280 && ctx->height >= 720)
+				|| (ctx->width >= 720 && ctx->height >= 1280)) {
+				exynos_cpufreq_get_level(800000,
+						&ctx->dev->cpufreq_level);
+				mfc_info("[%s] CPU Freq Locked 800MHz for %ux%u encode\n",
+					__func__, ctx->width, ctx->height);
+			} else {
 				exynos_cpufreq_get_level(500000,
 						&ctx->dev->cpufreq_level);
+				mfc_info("[%s] CPU Freq Locked 500MHz for %ux%u encode\n",
+					__func__, ctx->width, ctx->height);
+			}
 			exynos_cpufreq_lock(DVFS_LOCK_ID_MFC,
 					ctx->dev->cpufreq_level);
-			mfc_dbg("[%s] CPU Freq Locked 500MHz!\n", __func__);
 		}
 		atomic_inc(&ctx->dev->cpufreq_lock_cnt);
 		ctx->cpufreq_flag = true;
@@ -1994,4 +2010,3 @@ int mfc_exec_encoding(struct mfc_inst_ctx *ctx, union mfc_args *args)
 
 	return ret;
 }
-
