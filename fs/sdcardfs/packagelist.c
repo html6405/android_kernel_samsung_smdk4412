@@ -487,14 +487,22 @@ static ssize_t package_details_appid_show(struct package_details *package_detail
 static ssize_t package_details_appid_store(struct package_details *package_details,
 				       const char *page, size_t count)
 {
-	unsigned int tmp;
+	int tmp;
 	int ret;
 
-	ret = kstrtouint(page, 10, &tmp);
+	ret = kstrtoint(page, 10, &tmp);
 	if (ret)
 		return ret;
 
-	ret = insert_packagelist_entry(&package_details->name, tmp);
+	if (tmp == -1) {
+		remove_packagelist_entry(&package_details->name);
+		return count;
+	}
+
+	if (tmp < 0)
+		return -EINVAL;
+
+	ret = insert_packagelist_entry(&package_details->name, (appid_t)tmp);
 
 	if (ret)
 		return ret;
