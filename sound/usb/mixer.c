@@ -689,7 +689,7 @@ static int check_input_term(struct mixer_build *state, int id, struct usb_audio_
 		case UAC2_CLOCK_SELECTOR: {
 			struct uac_selector_unit_descriptor *d = p1;
 			/* call recursively to retrieve the channel info */
-			if (check_input_term(state, d->baSourceID[0], term) < 0)
+			if (__check_input_term(state, d->baSourceID[0], term) < 0)
 				return -ENODEV;
 			term->type = d->bDescriptorSubtype << 16; /* virtual type */
 			term->id = id;
