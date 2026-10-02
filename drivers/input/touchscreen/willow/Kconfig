@@ -1,0 +1,7 @@
+config TOUCHSCREEN_WILLOW_FT5X06
+	bool "FocalTech FT5606 touchscreen (General Mobile E-Tab 4)"
+	depends on I2C && MACH_WILLOW
+
+config TOUCHSCREEN_WILLOW_MXT1664S
+	bool "Atmel mXT1664S touchscreen (General Mobile E-Tab 4)"
+	depends on I2C && MACH_WILLOW

@@ -103,7 +103,7 @@ static int s5p_ehci_configurate(struct usb_hcd *hcd)
 }
 
 #if defined(CONFIG_LINK_DEVICE_HSIC) || defined(CONFIG_LINK_DEVICE_USB) ||\
-	defined(CONFIG_CDMA_MODEM_MDM6600) || defined(CONFIG_MDM_HSIC_PM)
+	defined(CONFIG_CDMA_MODEM_MDM6600) || defined(CONFIG_MDM_HSIC_PM) || defined(CONFIG_MACH_WILLOW)
 #ifdef CONFIG_MACH_P8LTE
 #define CP_PORT		 1  /* HSIC0 in S5PC210 */
 #else

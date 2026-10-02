@@ -20,7 +20,7 @@ obj-$(CONFIG_FUELGAUGE_MAX17042)	+= max17042_fuelgauge.o
 obj-$(CONFIG_FUELGAUGE_MAX17048)	+= max17048_fuelgauge.o
 obj-$(CONFIG_FUELGAUGE_MAX17050)	+= max17050_fuelgauge.o
 
-obj-$(CONFIG_CHARGER_MAX8903)	+= max8903_charger.o
+# willow: max8903 lives in drivers/power
 obj-$(CONFIG_CHARGER_SMB328)	+= smb328_charger.o
 obj-$(CONFIG_CHARGER_SMB347)	+= smb347_charger.o
 obj-$(CONFIG_CHARGER_BQ24190)	+= bq24190_charger.o

@@ -20,6 +20,7 @@
 #include <linux/power_supply.h>
 #include <linux/max17040_battery.h>
 #include <linux/slab.h>
+#include <linux/time.h>
 
 #define MAX17040_VCELL_MSB	0x02
 #define MAX17040_VCELL_LSB	0x03
@@ -34,14 +35,44 @@
 #define MAX17040_CMD_MSB	0xFE
 #define MAX17040_CMD_LSB	0xFF
 
-#define MAX17040_DELAY		1000
 #define MAX17040_BATTERY_FULL	95
 
+#ifdef CONFIG_CHARGER_MAX8903
+#define FUEL_GAUGE_ONLY
+#endif
+
+#ifdef FUEL_GAUGE_ONLY
+int fuel_guage_init;
+EXPORT_SYMBOL(fuel_guage_init);
+
+static struct i2c_driver max17040_i2c_driver;
+static struct i2c_client *fg_i2c_client;
+
+struct fg_state{
+	struct i2c_client	*client;
+};
+
+static struct wake_lock vbus_wake_lock;
+
+void isUSBconnected(bool usb_connect)
+{
+	if ( !fuel_guage_init ) /* vbus_wake_lock not initialized. (wake_lock_init) */
+		return;
+
+	if ( usb_connect ) {
+		wake_lock(&vbus_wake_lock);
+	} else {
+		wake_unlock(&vbus_wake_lock);
+		wake_lock_timeout(&vbus_wake_lock, 2*HZ);
+	}
+}
+EXPORT_SYMBOL(isUSBconnected);
+#else
 struct max17040_chip {
 	struct i2c_client		*client;
-	struct delayed_work		work;
 	struct power_supply		battery;
 	struct max17040_platform_data	*pdata;
+	struct timespec			next_update_time;
 
 	/* State Of Connect */
 	int online;
@@ -53,12 +84,20 @@ struct max17040_chip {
 	int status;
 };
 
+static void max17040_update_values(struct max17040_chip *chip);
+
 static int max17040_get_property(struct power_supply *psy,
 			    enum power_supply_property psp,
 			    union power_supply_propval *val)
 {
 	struct max17040_chip *chip = container_of(psy,
 				struct max17040_chip, battery);
+	struct timespec now;
+
+	ktime_get_ts(&now);
+	monotonic_to_bootbased(&now);
+	if (timespec_compare(&now, &chip->next_update_time) >= 0)
+		max17040_update_values(chip);
 
 	switch (psp) {
 	case POWER_SUPPLY_PROP_STATUS:
@@ -68,7 +107,7 @@ static int max17040_get_property(struct power_supply *psy,
 		val->intval = chip->online;
 		break;
 	case POWER_SUPPLY_PROP_VOLTAGE_NOW:
-		val->intval = chip->vcell;
+		val->intval = chip->vcell * 1250;
 		break;
 	case POWER_SUPPLY_PROP_CAPACITY:
 		val->intval = chip->soc;
@@ -78,6 +117,7 @@ static int max17040_get_property(struct power_supply *psy,
 	}
 	return 0;
 }
+#endif
 
 static int max17040_write_reg(struct i2c_client *client, int reg, u8 value)
 {
@@ -103,12 +143,42 @@ static int max17040_read_reg(struct i2c_client *client, int reg)
 	return ret;
 }
 
-static void max17040_reset(struct i2c_client *client)
+#ifdef FUEL_GAUGE_ONLY
+int fg_read_vcell(void)
 {
-	max17040_write_reg(client, MAX17040_CMD_MSB, 0x54);
-	max17040_write_reg(client, MAX17040_CMD_LSB, 0x00);
+	struct i2c_client *client = fg_i2c_client;
+	u8 msb;
+	u8 lsb;
+
+	if (!fuel_guage_init) {
+		dev_err(&client->dev, "%s : fuel guage IC is not initialized!!\n", __func__);
+		return -1;
+	}
+
+	msb = max17040_read_reg(client, MAX17040_VCELL_MSB);
+	lsb = max17040_read_reg(client, MAX17040_VCELL_LSB);
+
+	return ((msb << 4) + (lsb >> 4)) * 1250;
 }
 
+int fg_read_soc(void)
+{
+	struct i2c_client *client = fg_i2c_client;
+	u8 msb;
+	u8 lsb;
+
+	if (!fuel_guage_init) {
+		dev_err(&client->dev, "%s : fuel guage IC is not initialized!!\n", __func__);
+		return -1;
+	}
+
+	msb = max17040_read_reg(client, MAX17040_SOC_MSB);
+	lsb = max17040_read_reg(client, MAX17040_SOC_LSB);
+
+	return min((msb >> 1), 100);
+
+}
+#else
 static void max17040_get_vcell(struct i2c_client *client)
 {
 	struct max17040_chip *chip = i2c_get_clientdata(client);
@@ -130,7 +200,7 @@ static void max17040_get_soc(struct i2c_client *client)
 	msb = max17040_read_reg(client, MAX17040_SOC_MSB);
 	lsb = max17040_read_reg(client, MAX17040_SOC_LSB);
 
-	chip->soc = msb;
+	chip->soc = min(msb, (u8)100);
 }
 
 static void max17040_get_version(struct i2c_client *client)
@@ -148,7 +218,7 @@ static void max17040_get_online(struct i2c_client *client)
 {
 	struct max17040_chip *chip = i2c_get_clientdata(client);
 
-	if (chip->pdata->battery_online)
+	if (chip->pdata && chip->pdata->battery_online)
 		chip->online = chip->pdata->battery_online();
 	else
 		chip->online = 1;
@@ -158,7 +228,8 @@ static void max17040_get_status(struct i2c_client *client)
 {
 	struct max17040_chip *chip = i2c_get_clientdata(client);
 
-	if (!chip->pdata->charger_online || !chip->pdata->charger_enable) {
+	if (!chip->pdata || !chip->pdata->charger_online ||
+		!chip->pdata->charger_enable) {
 		chip->status = POWER_SUPPLY_STATUS_UNKNOWN;
 		return;
 	}
@@ -176,30 +247,54 @@ static void max17040_get_status(struct i2c_client *client)
 		chip->status = POWER_SUPPLY_STATUS_FULL;
 }
 
-static void max17040_work(struct work_struct *work)
+static void max17040_update_values(struct max17040_chip *chip)
 {
-	struct max17040_chip *chip;
-
-	chip = container_of(work, struct max17040_chip, work.work);
-
 	max17040_get_vcell(chip->client);
 	max17040_get_soc(chip->client);
 	max17040_get_online(chip->client);
 	max17040_get_status(chip->client);
 
-	schedule_delayed_work(&chip->work, MAX17040_DELAY);
+	/* next update must be at least 1 second later */
+	ktime_get_ts(&chip->next_update_time);
+	monotonic_to_bootbased(&chip->next_update_time);
+	chip->next_update_time.tv_sec++;
 }
 
 static enum power_supply_property max17040_battery_props[] = {
-	POWER_SUPPLY_PROP_STATUS,
-	POWER_SUPPLY_PROP_ONLINE,
+//	POWER_SUPPLY_PROP_STATUS,
+//	POWER_SUPPLY_PROP_ONLINE,
 	POWER_SUPPLY_PROP_VOLTAGE_NOW,
 	POWER_SUPPLY_PROP_CAPACITY,
 };
+#endif
 
 static int __devinit max17040_probe(struct i2c_client *client,
 			const struct i2c_device_id *id)
 {
+#ifdef FUEL_GAUGE_ONLY
+	struct fg_state *fg;
+	struct i2c_adapter *adapter = to_i2c_adapter(client->dev.parent);
+
+	fuel_guage_init = 0;
+	fg_i2c_client = NULL;
+
+	if (!i2c_check_functionality(adapter, I2C_FUNC_SMBUS_BYTE))
+		return -EIO;
+
+	fg = kzalloc(sizeof(struct fg_state), GFP_KERNEL);
+	if (fg == NULL) {
+		return -ENOMEM;
+	}
+
+	fg->client = client;
+	i2c_set_clientdata(client, fg);
+
+	/* rest of the initialisation goes here. */
+
+	fg_i2c_client = client;
+
+	fuel_guage_init = 1;
+#else
 	struct i2c_adapter *adapter = to_i2c_adapter(client->dev.parent);
 	struct max17040_chip *chip;
 	int ret;
@@ -222,57 +317,44 @@ static int __devinit max17040_probe(struct i2c_client *client,
 	chip->battery.properties	= max17040_battery_props;
 	chip->battery.num_properties	= ARRAY_SIZE(max17040_battery_props);
 
-	ret = power_supply_register(&client->dev, &chip->battery);
+	max17040_update_values(chip);
+
+	if (chip->pdata && chip->pdata->power_supply_register)
+		ret = chip->pdata->power_supply_register(&client->dev, &chip->battery);
+	else
+		ret = power_supply_register(&client->dev, &chip->battery);
 	if (ret) {
 		dev_err(&client->dev, "failed: power supply register\n");
 		kfree(chip);
 		return ret;
 	}
 
-	max17040_reset(client);
 	max17040_get_version(client);
 
-	INIT_DELAYED_WORK_DEFERRABLE(&chip->work, max17040_work);
-	schedule_delayed_work(&chip->work, MAX17040_DELAY);
-
+	if (chip->pdata)
+		i2c_smbus_write_word_data(client, MAX17040_RCOMP_MSB,
+			swab16(chip->pdata->rcomp_value));
+#endif
 	return 0;
 }
 
 static int __devexit max17040_remove(struct i2c_client *client)
 {
-	struct max17040_chip *chip = i2c_get_clientdata(client);
+#ifdef FUEL_GAUGE_ONLY
+	struct fg_state *fg = i2c_get_clientdata(client);
 
-	power_supply_unregister(&chip->battery);
-	cancel_delayed_work(&chip->work);
-	kfree(chip);
-	return 0;
-}
-
-#ifdef CONFIG_PM
-
-static int max17040_suspend(struct i2c_client *client,
-		pm_message_t state)
-{
-	struct max17040_chip *chip = i2c_get_clientdata(client);
-
-	cancel_delayed_work(&chip->work);
-	return 0;
-}
-
-static int max17040_resume(struct i2c_client *client)
-{
-	struct max17040_chip *chip = i2c_get_clientdata(client);
-
-	schedule_delayed_work(&chip->work, MAX17040_DELAY);
-	return 0;
-}
-
+	kfree(fg);
 #else
+	struct max17040_chip *chip = i2c_get_clientdata(client);
 
-#define max17040_suspend NULL
-#define max17040_resume NULL
-
-#endif /* CONFIG_PM */
+	if (chip->pdata && chip->pdata->power_supply_unregister)
+		chip->pdata->power_supply_unregister(&chip->battery);
+	else
+		power_supply_unregister(&chip->battery);
+	kfree(chip);
+#endif
+	return 0;
+}
 
 static const struct i2c_device_id max17040_id[] = {
 	{ "max17040", 0 },
@@ -286,13 +368,12 @@ static struct i2c_driver max17040_i2c_driver = {
 	},
 	.probe		= max17040_probe,
 	.remove		= __devexit_p(max17040_remove),
-	.suspend	= max17040_suspend,
-	.resume		= max17040_resume,
 	.id_table	= max17040_id,
 };
 
 static int __init max17040_init(void)
 {
+	wake_lock_init(&vbus_wake_lock, WAKE_LOCK_SUSPEND, "vbus_present");
 	return i2c_add_driver(&max17040_i2c_driver);
 }
 module_init(max17040_init);

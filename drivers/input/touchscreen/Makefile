@@ -92,3 +92,4 @@ obj-$(CONFIG_TOUCHSCREEN_CYTTSP4)   += cyttsp4_i2c.o cyttsp4_core.o
 ifeq ($(TARGET_BUILD_VARIANT), eng)
 KBUILD_CFLAGS		+= -DSEC_TSP_EVENT_DEBUG
 endif
+obj-y += willow/

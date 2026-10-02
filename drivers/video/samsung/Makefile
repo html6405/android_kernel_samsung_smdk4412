@@ -65,3 +65,4 @@ endif
 ifeq ($(CONFIG_FB_S5P_V2_DEBUG),y)
 EXTRA_CFLAGS += -DDEBUG
 endif
+obj-$(CONFIG_FB_S5P_LTN101AL03) += s3cfb_ltn101al03.o

@@ -17,7 +17,7 @@ struct s5p_ehci_platdata {
 	int (*phy_suspend)(struct platform_device *pdev, int type);
 	int (*phy_resume)(struct platform_device *pdev, int type);
 #if defined(CONFIG_LINK_DEVICE_HSIC) || defined(CONFIG_LINK_DEVICE_USB) ||\
-	defined(CONFIG_CDMA_MODEM_MDM6600)
+	defined(CONFIG_CDMA_MODEM_MDM6600) || defined(CONFIG_MACH_WILLOW)
 /* for SAMSUNG Modem*/
 	void (*noti_host_states)(struct platform_device *pdev, int type);
 	int (*get_cp_active_state)(void);
@@ -35,7 +35,7 @@ extern void s5p_ehci_set_platdata(struct s5p_ehci_platdata *pd);
 extern void s5p_ohci_set_platdata(struct s5p_ohci_platdata *pd);
 
 #if defined(CONFIG_LINK_DEVICE_HSIC) || defined(CONFIG_LINK_DEVICE_USB) ||\
-	defined(CONFIG_CDMA_MODEM_MDM6600)
+	defined(CONFIG_CDMA_MODEM_MDM6600) || defined(CONFIG_MACH_WILLOW)
 int s5p_ehci_port_control(struct platform_device *pdev, int port, int enable);
 #endif
 #endif /* __PLAT_S5P_EHCI_H */

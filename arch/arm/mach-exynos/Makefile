@@ -102,6 +102,7 @@ obj-$(CONFIG_MACH_U1)			+= u1_regulator_consumer.o
 obj-$(CONFIG_MACH_PX)			+= u1_regulator_consumer.o
 obj-$(CONFIG_MACH_NURI)			+= mach-nuri.o
 obj-$(CONFIG_MACH_SMDK4X12)		+= mach-smdk4x12.o
+obj-$(CONFIG_MACH_WILLOW)		+= mach-willow.o willow-wlan.o willow-gpio.o sec-common.o willow-compat.o
 ifeq ($(CONFIG_MACH_P4NOTE),y)
 obj-$(CONFIG_MACH_MIDAS)		+= mach-p4notepq.o px-switch.o p4note-jack.o
 else

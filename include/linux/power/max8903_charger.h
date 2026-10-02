@@ -23,6 +23,10 @@
 #ifndef __MAX8903_CHARGER_H__
 #define __MAX8903_CHARGER_H__
 
+#define CHARGER_BATTERY_NAME "charger-battery"
+#define CHARGER_USB_NAME "charger-usb"
+#define CHARGER_ADAPTER_NAME "charger-adapter"
+
 struct max8903_pdata {
 	/*
 	 * GPIOs
@@ -52,6 +56,8 @@ struct max8903_pdata {
 	 *	uok should be valid.
 	 */
 	bool usb_valid;
+
+	bool (*charger_online)(void);
 };
 
 #endif /* __MAX8903_CHARGER_H__ */
