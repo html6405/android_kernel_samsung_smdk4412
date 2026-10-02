@@ -46,6 +46,15 @@ struct cflayer *cfserl_create(int instance, bool use_stx)
 	return &this->layer;
 }
 
+void cfserl_release(struct cflayer *layer)
+{
+	struct cfserl *this = container_obj(layer);
+
+	if (this->incomplete_frm)
+		cfpkt_destroy(this->incomplete_frm);
+	kfree(this);
+}
+
 static int cfserl_receive(struct cflayer *l, struct cfpkt *newpkt)
 {
 	struct cfserl *layr = container_obj(l);

@@ -384,8 +384,11 @@ static int caif_device_notify(struct notifier_block *me, unsigned long what,
 				break;
 			}
 		}
+		layer = NULL;
 		caif_enroll_dev(dev, caifdev, link_support, head_room,
 				&layer, NULL);
+		if (!layer && link_support)
+			cfserl_release(link_support);
 		caifdev->flowctrl = dev_flowctrl;
 		break;
 
