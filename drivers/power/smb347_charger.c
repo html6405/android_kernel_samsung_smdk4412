@@ -210,8 +210,8 @@ static void smb347_charger_init(struct smb347_chg_data *chg)
 	/*  : USB5/1/HC Input state - Tri-state Input */
 	smb347_i2c_write(chg->client, SMB347_PIN_ENABLE_CONTROL, 0x00);
 
-	/* Input current limit : DCIN 1800mA, USBIN HC 1800mA */
-	smb347_i2c_write(chg->client, SMB347_INPUT_CURRENTLIMIT, 0x66);
+	/* Input current limit : DCIN 2000mA, USBIN HC 2000mA */
+	smb347_i2c_write(chg->client, SMB347_INPUT_CURRENTLIMIT, 0x77);
 
 	/* Various func. : USBIN primary input, VCHG func. enable */
 	smb347_i2c_write(chg->client, SMB347_VARIOUS_FUNCTIONS, 0xA7);
@@ -299,13 +299,13 @@ static void smb347_set_charging_state(int enable, int charging_mode)
 
 		/* Init smb347 charger */
 		smb347_charger_init(chg);
-		/* Input current limit : DCIN 1800mA, USBIN HC 1800mA */
+		/* Input current limit : DCIN 2000mA, USBIN HC 2000mA */
 		smb347_i2c_write(chg->client,
-		SMB347_INPUT_CURRENTLIMIT, 0x66);
+		SMB347_INPUT_CURRENTLIMIT, 0x77);
 
 		/* CommandB : High-current mode */
 		smb347_i2c_write(chg->client, SMB347_COMMAND_B, 0x03);
-		pr_info("%s : LOW(USB5) charging enabled 1.8A by html6405\n", __func__);
+		pr_info("%s : LOW(USB5) charging enabled 2.0A\n", __func__);
 
 		smb347_enable_charging(chg);
 	} else {
