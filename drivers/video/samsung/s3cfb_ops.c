@@ -1620,8 +1620,12 @@ void s3c_fb_update_regs(struct s3cfb_global *fbdev, struct s3c_reg_data *regs)
 		wait_for_vsync = false;
 
 		for (i = 0; i < pdata->nr_wins; i++) {
-			u32 new_start = regs->vidw_buf_start[i];
-			u32 shadow_start = s3cfb_get_win_cur_buf_addr(fbdev, i);
+			u32 new_start;
+			u32 shadow_start;
+			if (!(regs->shadowcon & SHADOWCON_CHx_ENABLE(i)))
+				continue;
+			new_start = regs->vidw_buf_start[i];
+			shadow_start = s3cfb_get_win_cur_buf_addr(fbdev, i);
 			if (unlikely(new_start != shadow_start)) {
 				wait_for_vsync = true;
 				break;
