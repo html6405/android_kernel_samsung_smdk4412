@@ -1016,16 +1016,47 @@ static ssize_t show_cmd_list(struct device *dev, struct device_attribute
 	return cnt;
 }
 
+static ssize_t dt2w_enable_show(struct device *dev,
+		struct device_attribute *attr, char *buf)
+{
+	struct mxt_data *data = dev_get_drvdata(dev);
+
+	return snprintf(buf, PAGE_SIZE, "%u\n", data->dt2w_enabled ? 1 : 0);
+}
+
+static ssize_t dt2w_enable_store(struct device *dev,
+		struct device_attribute *attr, const char *buf, size_t count)
+{
+	struct mxt_data *data = dev_get_drvdata(dev);
+	unsigned int mode;
+
+	if (sscanf(buf, "%u", &mode) != 1 || mode > 1)
+		return -EINVAL;
+
+	mutex_lock(&data->lock);
+	data->dt2w_enabled = !!mode;
+	mutex_unlock(&data->lock);
+
+	dev_info(&data->client->dev,
+		"DT2W: %s (takes effect on next display suspend)\n",
+		data->dt2w_enabled ? "enabled" : "disabled");
+
+	return count;
+}
+
 static DEVICE_ATTR(cmd, S_IWUSR | S_IWGRP, NULL, store_cmd);
 static DEVICE_ATTR(cmd_status, S_IRUGO, show_cmd_status, NULL);
 static DEVICE_ATTR(cmd_result, S_IRUGO, show_cmd_result, NULL);
 static DEVICE_ATTR(cmd_list, S_IRUGO, show_cmd_list, NULL);
+static DEVICE_ATTR(dt2w_enable, S_IRUGO | S_IWUSR | S_IWGRP,
+	dt2w_enable_show, dt2w_enable_store);
 
 static struct attribute *touchscreen_attributes[] = {
 	&dev_attr_cmd.attr,
 	&dev_attr_cmd_status.attr,
 	&dev_attr_cmd_result.attr,
 	&dev_attr_cmd_list.attr,
+	&dev_attr_dt2w_enable.attr,
 	NULL,
 };
 

@@ -111,6 +111,45 @@
 #define MXT_T7_IDLE_ACQ_INT	0
 #define MXT_T7_ACT_ACQ_INT	1
 
+/* Low-power double-tap-to-wake support */
+#define MXT_T7_ACTV2IDLETO		2
+
+#define MXT_T9_CTRL			0
+#define MXT_T9_CTRL_RPTEN		(1 << 1)
+
+/* Extra Touchscreen Data T57 uses the standard CTRL ENABLE/RPTEN bits. */
+#define MXT_T57_CTRL			0
+#define MXT_T57_CTRL_RPTEN		(1 << 1)
+
+#define MXT_T24_CTRL			0
+#define MXT_T24_NUMGEST			1
+#define MXT_T24_GESTEN_0		2
+#define MXT_T24_GESTEN_1		3
+#define MXT_T24_PROCESS			4
+#define MXT_T24_TAPTO			5
+#define MXT_T24_TAPTHR_LSB		15
+#define MXT_T24_TAPTHR_MSB		16
+#define MXT_T24_CFG_SIZE		19
+
+#define MXT_T24_CTRL_ENABLE		(1 << 0)
+#define MXT_T24_CTRL_RPTEN		(1 << 1)
+#define MXT_T24_GESTEN_DBLTAP		(1 << 3)
+#define MXT_T24_PROCESS_DBLTAP		(1 << 3)
+
+#define MXT_T24_EVENT_MASK		0x0f
+#define MXT_T24_EVENT_DOUBLETAP		0x04
+
+/*
+ * 255 is free-run on this maXTouch generation. Avoid using free-run
+ * values during gesture suspend. 64/16 ms keeps idle scanning low
+ * while maintaining reasonable first- and second-tap latency.
+ */
+#define MXT_DT2W_IDLE_ACQINT		64
+#define MXT_DT2W_ACTIVE_ACQINT		16
+#define MXT_DT2W_ACTV2IDLETO		2
+#define MXT_DT2W_TAPTO			75	/* 75 * 4 ms = 300 ms */
+#define MXT_DT2W_TAPTHR			100
+
 #if CHECK_ANTITOUCH
 #define MXT_T61_TIMER_ONESHOT	0
 #define MXT_T61_TIMER_REPEAT	1
@@ -276,6 +315,16 @@ struct mxt_data {
 	int num_fingers;
 	bool mxt_enabled;
 	bool debug_log;
+	bool dt2w_enabled;
+	bool gesture_mode;
+	bool irq_wake_enabled;
+	bool dt2w_regs_valid;
+	/* Register snapshots used only while gesture suspend is active. */
+	u8 dt2w_saved_t7[3];
+	u8 dt2w_saved_t9_ctrl;
+	u8 dt2w_saved_t57_ctrl;
+	bool dt2w_t57_valid;
+	u8 dt2w_saved_t24[MXT_T24_CFG_SIZE];
 #if TSP_USE_SHAPETOUCH
 	int16_t sumsize;
 #endif

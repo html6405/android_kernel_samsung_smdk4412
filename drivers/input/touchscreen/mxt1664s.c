@@ -22,6 +22,7 @@
 #include <linux/delay.h>
 #include <linux/slab.h>
 #include <linux/gpio.h>
+#include <linux/pm_wakeup.h>
 #include <linux/i2c/mxt1664s.h>
 #include <asm/unaligned.h>
 #include <linux/firmware.h>
@@ -973,6 +974,254 @@ static void mxt_treat_T61_object(struct mxt_data *data, u8 *msg)
 }
 #endif	/* CHECK_ANTITOUCH */
 
+static void mxt_release_all_fingers(struct mxt_data *data)
+{
+	int i;
+	int count = 0;
+
+	for (i = 0; i < data->num_fingers; i++) {
+		if (data->fingers[i].state == MXT_STATE_INACTIVE)
+			continue;
+		data->fingers[i].state = MXT_STATE_RELEASE;
+		count++;
+	}
+
+	if (count)
+		mxt_report_input_data(data);
+
+#if TSP_BOOSTER
+	mxt_set_dvfs_on(data, false);
+#endif
+}
+
+static void mxt_treat_T24_object(struct mxt_data *data, u8 *msg)
+{
+	u8 event = msg[1] & MXT_T24_EVENT_MASK;
+
+	if (!data->gesture_mode || !data->dt2w_enabled)
+		return;
+
+	dev_info(&data->client->dev,
+		"DT2W: T24 event=%u status=0x%02x\n", event, msg[1]);
+
+	if (event != MXT_T24_EVENT_DOUBLETAP)
+		return;
+
+	dev_info(&data->client->dev, "DT2W: T24 double tap\n");
+
+	input_report_key(data->input_dev, KEY_WAKEUP, 1);
+	input_sync(data->input_dev);
+	input_report_key(data->input_dev, KEY_WAKEUP, 0);
+	input_sync(data->input_dev);
+}
+
+static int mxt_enter_gesture_mode(struct mxt_data *data)
+{
+	struct mxt_object *t24;
+	struct mxt_object *t57;
+	u8 t24_cfg[MXT_T24_CFG_SIZE] = { 0 };
+	u8 t7_cfg[3];
+	u8 t9_ctrl;
+	u8 t57_ctrl;
+	int ret;
+
+	t24 = mxt_get_object_info(data, PROCI_ONETOUCHGESTUREPROCESSOR_T24);
+	if (!t24 || t24->size < MXT_T24_CFG_SIZE) {
+		dev_err(&data->client->dev,
+			"DT2W: T24 unavailable or too small\n");
+		return -ENODEV;
+	}
+
+	mxt_release_all_fingers(data);
+
+	ret = mxt_read_object(data, GEN_POWERCONFIG_T7, 0,
+			&data->dt2w_saved_t7[0]);
+	if (ret)
+		return ret;
+	ret = mxt_read_object(data, GEN_POWERCONFIG_T7, 1,
+			&data->dt2w_saved_t7[1]);
+	if (ret)
+		return ret;
+	ret = mxt_read_object(data, GEN_POWERCONFIG_T7, 2,
+			&data->dt2w_saved_t7[2]);
+	if (ret)
+		return ret;
+
+	ret = mxt_read_object(data, TOUCH_MULTITOUCHSCREEN_T9,
+			MXT_T9_CTRL, &data->dt2w_saved_t9_ctrl);
+	if (ret)
+		return ret;
+
+	ret = mxt_read_mem(data, t24->start_address, MXT_T24_CFG_SIZE,
+			data->dt2w_saved_t24);
+	if (ret)
+		return ret;
+
+	/*
+	 * Enables T57 reporting (CTRL 0xe3). T57 is touch-driven and
+	 * would otherwise assert CHG on a single touch, causing a needless
+	 * SoC wake before T24 has recognized a double tap. Keep processing
+	 * enabled, but suppress only its host reports while asleep.
+	 */
+	data->dt2w_t57_valid = false;
+	t57 = mxt_get_object_info(data, PROCI_EXTRATOUCHSCREENDATA_T57);
+	if (t57) {
+		ret = mxt_read_object(data, PROCI_EXTRATOUCHSCREENDATA_T57,
+			MXT_T57_CTRL, &data->dt2w_saved_t57_ctrl);
+		if (ret)
+			return ret;
+		data->dt2w_t57_valid = true;
+	}
+
+	data->dt2w_regs_valid = true;
+
+	/*
+	 * Keep T9 acquisition/scanning enabled for the internal T24 gesture
+	 * engine, but suppress ordinary T9 host reports while asleep.
+	 */
+	/*
+	 * input_close() may have stopped T9 before FB suspend.  Always base
+	 * gesture scanning on the configured T9 CTRL so acquisition remains
+	 * enabled, while suppressing ordinary T9 host reports.
+	 */
+	t9_ctrl = data->tsp_ctl & ~MXT_T9_CTRL_RPTEN;
+	ret = mxt_write_object(data, TOUCH_MULTITOUCHSCREEN_T9,
+			MXT_T9_CTRL, t9_ctrl);
+	if (ret)
+		goto restore;
+
+	if (data->dt2w_t57_valid) {
+		t57_ctrl = data->dt2w_saved_t57_ctrl & ~MXT_T57_CTRL_RPTEN;
+		ret = mxt_write_object(data, PROCI_EXTRATOUCHSCREENDATA_T57,
+			MXT_T57_CTRL, t57_ctrl);
+		if (ret)
+			goto restore;
+	}
+
+	/* Enable only the double-tap path in T24. */
+	t24_cfg[MXT_T24_CTRL] = MXT_T24_CTRL_ENABLE | MXT_T24_CTRL_RPTEN;
+	t24_cfg[MXT_T24_NUMGEST] = 2;
+	t24_cfg[MXT_T24_GESTEN_0] = MXT_T24_GESTEN_DBLTAP;
+	t24_cfg[MXT_T24_GESTEN_1] = 0;
+	t24_cfg[MXT_T24_PROCESS] = MXT_T24_PROCESS_DBLTAP;
+	t24_cfg[MXT_T24_TAPTO] = MXT_DT2W_TAPTO;
+	t24_cfg[MXT_T24_TAPTHR_LSB] = MXT_DT2W_TAPTHR & 0xff;
+	t24_cfg[MXT_T24_TAPTHR_MSB] = (MXT_DT2W_TAPTHR >> 8) & 0xff;
+
+	ret = mxt_write_mem(data, t24->start_address,
+			MXT_T24_CFG_SIZE, t24_cfg);
+	if (ret)
+		goto restore;
+
+	/* Reduced-duty acquisition while the display is off. */
+	t7_cfg[0] = MXT_DT2W_IDLE_ACQINT;
+	t7_cfg[1] = MXT_DT2W_ACTIVE_ACQINT;
+	t7_cfg[2] = MXT_DT2W_ACTV2IDLETO;
+	ret = mxt_write_object(data, GEN_POWERCONFIG_T7, 0, t7_cfg[0]);
+	if (ret)
+		goto restore;
+	ret = mxt_write_object(data, GEN_POWERCONFIG_T7, 1, t7_cfg[1]);
+	if (ret)
+		goto restore;
+	ret = mxt_write_object(data, GEN_POWERCONFIG_T7, 2, t7_cfg[2]);
+	if (ret)
+		goto restore;
+
+	/*
+	 * GPM2(3) is a normal GPIO interrupt, not a GPX wakeup EINT.
+	 * Keep IRQ 387 alive by blocking full suspend during gesture mode.
+	 */
+	pm_stay_awake(&data->client->dev);
+	data->irq_wake_enabled = false;
+	data->gesture_mode = true;
+	dev_info(&data->client->dev,
+		"DT2W: gesture suspend enabled (T7=%u/%u/%u)\n",
+		t7_cfg[0], t7_cfg[1], t7_cfg[2]);
+	return 0;
+
+restore:
+	/* Best-effort rollback; never persist these settings to NVM. */
+	mxt_write_object(data, GEN_POWERCONFIG_T7, 0, data->dt2w_saved_t7[0]);
+	mxt_write_object(data, GEN_POWERCONFIG_T7, 1, data->dt2w_saved_t7[1]);
+	mxt_write_object(data, GEN_POWERCONFIG_T7, 2, data->dt2w_saved_t7[2]);
+	mxt_write_object(data, TOUCH_MULTITOUCHSCREEN_T9,
+		MXT_T9_CTRL, data->dt2w_saved_t9_ctrl);
+	if (data->dt2w_t57_valid)
+		mxt_write_object(data, PROCI_EXTRATOUCHSCREENDATA_T57,
+			MXT_T57_CTRL, data->dt2w_saved_t57_ctrl);
+	mxt_write_mem(data, t24->start_address, MXT_T24_CFG_SIZE,
+		data->dt2w_saved_t24);
+	data->dt2w_t57_valid = false;
+	data->dt2w_regs_valid = false;
+	return ret;
+}
+
+static int mxt_exit_gesture_mode(struct mxt_data *data)
+{
+	struct mxt_object *t24;
+	int ret = 0;
+	int tmp;
+
+	if (!data->gesture_mode)
+		return 0;
+
+	pm_relax(&data->client->dev);
+	data->irq_wake_enabled = false;
+
+	/* Serialize register restoration against the threaded IRQ handler. */
+	disable_irq(data->client->irq);
+
+	t24 = mxt_get_object_info(data, PROCI_ONETOUCHGESTUREPROCESSOR_T24);
+	if (data->dt2w_regs_valid) {
+		tmp = mxt_write_object(data, GEN_POWERCONFIG_T7, 0,
+			data->dt2w_saved_t7[0]);
+		if (tmp && !ret)
+			ret = tmp;
+		tmp = mxt_write_object(data, GEN_POWERCONFIG_T7, 1,
+			data->dt2w_saved_t7[1]);
+		if (tmp && !ret)
+			ret = tmp;
+		tmp = mxt_write_object(data, GEN_POWERCONFIG_T7, 2,
+			data->dt2w_saved_t7[2]);
+		if (tmp && !ret)
+			ret = tmp;
+
+		tmp = mxt_write_object(data, TOUCH_MULTITOUCHSCREEN_T9,
+			MXT_T9_CTRL, data->dt2w_saved_t9_ctrl);
+		if (tmp && !ret)
+			ret = tmp;
+
+		if (data->dt2w_t57_valid) {
+			tmp = mxt_write_object(data,
+				PROCI_EXTRATOUCHSCREENDATA_T57, MXT_T57_CTRL,
+				data->dt2w_saved_t57_ctrl);
+			if (tmp && !ret)
+				ret = tmp;
+		}
+
+		if (t24 && t24->size >= MXT_T24_CFG_SIZE) {
+			tmp = mxt_write_mem(data, t24->start_address,
+				MXT_T24_CFG_SIZE, data->dt2w_saved_t24);
+			if (tmp && !ret)
+				ret = tmp;
+		}
+	}
+
+	data->dt2w_t57_valid = false;
+	data->dt2w_regs_valid = false;
+	data->gesture_mode = false;
+	enable_irq(data->client->irq);
+
+#if TSP_INFORM_CHARGER
+	set_charger_config(data, 0);
+	if (!data->charging_mode)
+		schedule_delayed_work(&data->acq_int_dwork, HZ * 3);
+#endif
+
+	dev_info(&data->client->dev, "DT2W: normal touch mode restored\n");
+	return ret;
+}
+
 static irqreturn_t mxt_irq_thread(int irq, void *ptr)
 {
 	struct mxt_data *data = ptr;
@@ -1000,7 +1249,12 @@ static irqreturn_t mxt_irq_thread(int irq, void *ptr)
 			break;
 
 		case TOUCH_MULTITOUCHSCREEN_T9:
-			mxt_treat_T9_object(data, msg);
+			if (!data->gesture_mode)
+				mxt_treat_T9_object(data, msg);
+			break;
+
+		case PROCI_ONETOUCHGESTUREPROCESSOR_T24:
+			mxt_treat_T24_object(data, msg);
 			break;
 
 		case PROCI_TOUCHSUPPRESSION_T42:
@@ -1037,24 +1291,8 @@ static irqreturn_t mxt_irq_thread(int irq, void *ptr)
 
 static int mxt_internal_suspend(struct mxt_data *data)
 {
-	int i;
-	int count = 0;
-
-	for (i = 0; i < data->num_fingers; i++) {
-		if (data->fingers[i].state == MXT_STATE_INACTIVE)
-			continue;
-		data->fingers[i].state = MXT_STATE_RELEASE;
-		count++;
-	}
-	if (count)
-		mxt_report_input_data(data);
-
-#if TSP_BOOSTER
-	mxt_set_dvfs_on(data, false);
-#endif
-
+	mxt_release_all_fingers(data);
 	data->pdata->power_off();
-
 	return 0;
 }
 
@@ -1279,7 +1517,10 @@ static int mxt_input_open(struct input_dev *dev)
 {
 	struct mxt_data *data = input_get_drvdata(dev);
 
-	mxt_start(data);
+	mutex_lock(&data->lock);
+	if (!data->gesture_mode)
+		mxt_start(data);
+	mutex_unlock(&data->lock);
 
 	return 0;
 }
@@ -1288,7 +1529,10 @@ static void mxt_input_close(struct input_dev *dev)
 {
 	struct mxt_data *data = input_get_drvdata(dev);
 
-	mxt_stop(data);
+	mutex_lock(&data->lock);
+	if (!data->gesture_mode)
+		mxt_stop(data);
+	mutex_unlock(&data->lock);
 }
 
 static void late_resume_dwork(struct work_struct *work)
@@ -1311,6 +1555,7 @@ static void late_resume_dwork(struct work_struct *work)
 
 static void mxt_fb_suspend(struct mxt_data *data)
 {
+	int ret;
 	if (data->fb_suspended)
         		return;
 #if TSP_INFORM_CHARGER
@@ -1320,9 +1565,21 @@ static void mxt_fb_suspend(struct mxt_data *data)
 	mutex_lock(&data->lock);
 
 	if (data->mxt_enabled) {
-		disable_irq(data->client->irq);
-		data->mxt_enabled = false;
-		mxt_internal_suspend(data);
+		if (data->dt2w_enabled) {
+			ret = mxt_enter_gesture_mode(data);
+			if (ret) {
+				dev_err(&data->client->dev,
+					"DT2W: gesture suspend failed (%d), falling back to power off\n",
+					ret);
+				disable_irq(data->client->irq);
+				data->mxt_enabled = false;
+				mxt_internal_suspend(data);
+			}
+		} else {
+			disable_irq(data->client->irq);
+			data->mxt_enabled = false;
+			mxt_internal_suspend(data);
+		}
 	} else {
 		dev_err(&data->client->dev,
 			"%s. but touch already off\n", __func__);
@@ -1339,7 +1596,11 @@ static void mxt_fb_resume(struct mxt_data *data)
 
 	mutex_lock(&data->lock);
 
-	if (data->mxt_enabled) {
+	if (data->gesture_mode) {
+		if (mxt_exit_gesture_mode(data))
+			dev_err(&data->client->dev,
+				"DT2W: failed to fully restore normal registers\n");
+	} else if (data->mxt_enabled) {
 		dev_err(&data->client->dev,
 			"%s. but touch already on\n", __func__);
 	} else {
@@ -1386,9 +1647,17 @@ static int mxt_suspend(struct device *dev)
 
 	mutex_lock(&data->lock);
 
-	disable_irq(data->client->irq);
-	mxt_internal_suspend(data);
-	data->mxt_enabled = false;
+	if (data->dt2w_enabled) {
+		if (mxt_enter_gesture_mode(data)) {
+			disable_irq(data->client->irq);
+			mxt_internal_suspend(data);
+			data->mxt_enabled = false;
+		}
+	} else {
+		disable_irq(data->client->irq);
+		mxt_internal_suspend(data);
+		data->mxt_enabled = false;
+	}
 
 	mutex_unlock(&data->lock);
 	return 0;
@@ -1401,9 +1670,13 @@ static int mxt_resume(struct device *dev)
 
 	mutex_lock(&data->lock);
 
-	mxt_internal_resume(data);
-	data->mxt_enabled = true;
-	enable_irq(data->client->irq);
+	if (data->gesture_mode) {
+		mxt_exit_gesture_mode(data);
+	} else {
+		mxt_internal_resume(data);
+		data->mxt_enabled = true;
+		enable_irq(data->client->irq);
+	}
 
 	mutex_unlock(&data->lock);
 	return 0;
@@ -1650,6 +1923,7 @@ static int __devinit mxt_probe(struct i2c_client *client,
 	set_bit(EV_ABS, input_dev->evbit);
 	set_bit(EV_KEY, input_dev->evbit);
 	set_bit(MT_TOOL_FINGER, input_dev->keybit);
+	set_bit(KEY_WAKEUP, input_dev->keybit);
 	set_bit(INPUT_PROP_DIRECT, input_dev->propbit);
 
 	input_mt_init_slots(input_dev, data->num_fingers);
@@ -1709,10 +1983,12 @@ static int __devinit mxt_probe(struct i2c_client *client,
 	if (ret)
 		goto err_free_mem;
 
-	/* disabled report touch event to prevent unnecessary event.
-	* it will be enabled in open function
-	*/
-	mxt_stop(data);
+	/*
+	 * Keep T9 enabled after initialization.  KEY_WAKEUP makes the input
+	 * device eligible for the keyboard handler, which may open it during
+	 * registration before probe completes; a later unconditional stop
+	 * would leave normal touch disabled until the next resume.
+	 */
 
 #if TSP_INFORM_CHARGER
 	/* Register callbacks */
@@ -1731,6 +2007,11 @@ static int __devinit mxt_probe(struct i2c_client *client,
 		dev_err(&client->dev, "Failed register irq\n");
 		goto err_free_mem;
 	}
+
+	ret = device_init_wakeup(&client->dev, true);
+	if (ret)
+		dev_warn(&client->dev,
+			"DT2W: device wakeup-source init failed: %d\n", ret);
 #ifdef CONFIG_FB
 	data->fb_suspended = false;
 	data->fb_notif.notifier_call = fb_notifier_callback;
@@ -1774,6 +2055,9 @@ err_alloc_dev:
 static int __devexit mxt_remove(struct i2c_client *client)
 {
 	struct mxt_data *data = i2c_get_clientdata(client);
+
+	pm_relax(&client->dev);
+	device_init_wakeup(&client->dev, false);
 
 #ifdef CONFIG_FB
 	fb_unregister_client(&data->fb_notif);
