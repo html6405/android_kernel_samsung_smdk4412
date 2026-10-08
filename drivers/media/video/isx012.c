@@ -3299,6 +3299,19 @@ static int isx012_g_ctrl(struct v4l2_subdev *sd, struct v4l2_control *ctrl)
 	mutex_lock(&state->ctrl_lock);
 
 	switch (ctrl->id) {
+	case V4L2_CID_CAMERA_CAPTURE:
+		if (state->flash.mode == FLASH_MODE_ON) {
+			ctrl->value = 1;
+		} else if (state->flash.mode == FLASH_MODE_AUTO) {
+			u32 light_level = LUX_LEVEL_MAX;
+
+			isx012_get_light_level(sd, &light_level);
+			ctrl->value = isx012_check_flash_fire(sd, light_level) ? 1 : 0;
+		} else {
+			ctrl->value = 0;
+		}
+		break;
+
 	case V4L2_CID_CAMERA_EXIF_EXPTIME:
 		if (state->sensor_mode == SENSOR_CAMERA)
 			ctrl->value = state->exif.exp_time_den;
