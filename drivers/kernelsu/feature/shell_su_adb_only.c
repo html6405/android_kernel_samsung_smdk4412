@@ -61,11 +61,19 @@ static int shell_su_adb_only_feature_set(u64 value)
 {
 	bool enable = value != 0;
 #ifdef KSU_CAN_USE_JUMP_LABEL
+#if LINUX_VERSION_CODE < KERNEL_VERSION(4, 3, 0)
+	if (enable) {
+		ksu_static_key_enable(&ksu_shell_su_adb_only.key);
+	} else {
+		ksu_static_key_disable(&ksu_shell_su_adb_only.key);
+	}
+#else
 	if (enable) {
 		static_key_enable(&ksu_shell_su_adb_only.key);
 	} else {
 		static_key_disable(&ksu_shell_su_adb_only.key);
 	}
+#endif
 #else
 	ksu_shell_su_adb_only = !!enable;
 #endif
