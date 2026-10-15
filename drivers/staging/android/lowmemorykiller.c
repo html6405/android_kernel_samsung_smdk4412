@@ -362,6 +362,8 @@ static int lowmem_shrink(struct shrinker *s, struct shrink_control *sc)
 			     other_free * (long)(PAGE_SIZE / 1024));
 		lowmem_deathpending = selected;
 		lowmem_deathpending_timeout = jiffies + HZ;
+		/* Let the victim reach memory reserves so it can exit promptly. */
+		set_tsk_thread_flag(selected, TIF_MEMDIE);
 		send_sig(SIGKILL, selected, 0);
 		rem -= selected_tasksize;
 	}
@@ -583,4 +585,3 @@ module_init(lowmem_init);
 module_exit(lowmem_exit);
 
 MODULE_LICENSE("GPL");
-
