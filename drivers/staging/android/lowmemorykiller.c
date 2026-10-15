@@ -40,7 +40,7 @@
 #include <linux/swap.h>
 #include <linux/rcupdate.h>
 #include <linux/notifier.h>
-#include <linux/swap.h>
+#include <linux/mutex.h>
 
 #ifdef CONFIG_HIGHMEM
 #define _ZONE ZONE_HIGHMEM
@@ -67,6 +67,7 @@ static struct task_struct *lowmem_deathpending;
 static int lmk_fast_run = 1;
 
 static unsigned long lowmem_deathpending_timeout;
+static DEFINE_MUTEX(lowmem_scan_mutex);
 
 #define lowmem_print(level, x...)			\
 	do {						\
@@ -205,7 +206,6 @@ static int lowmem_shrink(struct shrinker *s, struct shrink_control *sc)
 {
 	struct task_struct *tsk;
 	struct task_struct *selected = NULL;
-	int rem = 0;
 	int tasksize;
 	int i;
 	int min_score_adj = OOM_SCORE_ADJ_MAX + 1;
@@ -213,6 +213,10 @@ static int lowmem_shrink(struct shrinker *s, struct shrink_control *sc)
 	int selected_tasksize = 0;
 	int selected_oom_score_adj;
 	int array_size = ARRAY_SIZE(lowmem_adj);
+	int rem = global_page_state(NR_ACTIVE_ANON) +
+		  global_page_state(NR_ACTIVE_FILE) +
+		  global_page_state(NR_INACTIVE_ANON) +
+		  global_page_state(NR_INACTIVE_FILE);
 #ifndef CONFIG_DMA_CMA
 	int other_free = global_page_state(NR_FREE_PAGES) - totalreserve_pages;
 #else
@@ -231,7 +235,19 @@ static int lowmem_shrink(struct shrinker *s, struct shrink_control *sc)
 	 */
 	if (lowmem_deathpending &&
 	    time_before_eq(jiffies, lowmem_deathpending_timeout))
-		return 0;
+		return rem;
+
+	if (sc->nr_to_scan > 0) {
+		if (mutex_lock_interruptible(&lowmem_scan_mutex))
+			return rem;
+
+		/* Another reclaim thread may have selected a victim meanwhile. */
+		if (lowmem_deathpending &&
+		    time_before_eq(jiffies, lowmem_deathpending_timeout)) {
+			mutex_unlock(&lowmem_scan_mutex);
+			return rem;
+		}
+	}
 
 	tune_lmk_param(&other_free, &other_file, sc);
 
@@ -250,13 +266,11 @@ static int lowmem_shrink(struct shrinker *s, struct shrink_control *sc)
 		lowmem_print(3, "lowmem_shrink %lu, %x, ofree %d %d, ma %d\n",
 				sc->nr_to_scan, sc->gfp_mask, other_free,
 				other_file, min_score_adj);
-	rem = global_page_state(NR_ACTIVE_ANON) +
-		global_page_state(NR_ACTIVE_FILE) +
-		global_page_state(NR_INACTIVE_ANON) +
-		global_page_state(NR_INACTIVE_FILE);
 	if (sc->nr_to_scan <= 0 || min_score_adj == OOM_SCORE_ADJ_MAX + 1) {
 		lowmem_print(5, "lowmem_shrink %lu, %x, return %d\n",
 			     sc->nr_to_scan, sc->gfp_mask, rem);
+		if (sc->nr_to_scan > 0)
+			mutex_unlock(&lowmem_scan_mutex);
 		return rem;
 	}
 
@@ -336,6 +350,7 @@ static int lowmem_shrink(struct shrinker *s, struct shrink_control *sc)
 	lowmem_print(4, "lowmem_shrink %lu, %x, return %d\n",
 		     sc->nr_to_scan, sc->gfp_mask, rem);
 	rcu_read_unlock();
+	mutex_unlock(&lowmem_scan_mutex);
 	return rem;
 }
 
