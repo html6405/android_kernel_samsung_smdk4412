@@ -114,18 +114,20 @@ static int ion_exynos_heap_allocate(struct ion_heap *heap,
 	int copied = 0;
 	struct scatterlist *sgl;
 	struct sg_table *sgtable;
+	struct page *page;
 
 	while (size && *cur_order) {
-		struct page *page;
+		gfp_t gfp = GFP_HIGHUSER | __GFP_COMP | __GFP_NOWARN;
 
 		if (size < (1 << *cur_order)) {
 			cur_order++;
 			continue;
 		}
 
-		page = alloc_pages(GFP_HIGHUSER | __GFP_COMP |
-						__GFP_NOWARN | __GFP_NORETRY,
-						*cur_order - PAGE_SHIFT);
+		/* Higher orders may fail fast; order-0 must be allowed to reclaim. */
+		if (*cur_order != PAGE_SHIFT)
+			gfp |= __GFP_NORETRY;
+		page = alloc_pages(gfp, *cur_order - PAGE_SHIFT);
 		if (!page) {
 			cur_order++;
 			continue;
@@ -139,7 +141,7 @@ static int ion_exynos_heap_allocate(struct ion_heap *heap,
 					sizeof(*im_phys_bufs) * IMBUFS_ENTRIES,
 					GFP_KERNEL);
 			if (!im_phys_bufs)
-				break;
+				goto alloc_error_page;
 
 			cur_bufs = im_phys_bufs;
 		} else if (alloc_chunks < MAX_LV1IMBUFS) {
@@ -150,7 +152,7 @@ static int ion_exynos_heap_allocate(struct ion_heap *heap,
 					sizeof(*pim_phys_bufs) * IMBUFS_ENTRIES,
 					GFP_KERNEL);
 				if (!pim_phys_bufs)
-					break;
+					goto alloc_error_page;
 			}
 
 			if (!pim_phys_bufs[lv1idx]) {
@@ -158,7 +160,7 @@ static int ion_exynos_heap_allocate(struct ion_heap *heap,
 					sizeof(*cur_bufs) * IMBUFS_ENTRIES,
 					GFP_KERNEL);
 				if (!pim_phys_bufs[lv1idx])
-					break;
+					goto alloc_error_page;
 			}
 
 			cur_bufs = pim_phys_bufs[lv1idx];
@@ -171,7 +173,7 @@ static int ion_exynos_heap_allocate(struct ion_heap *heap,
 					sizeof(*ppim_phys_bufs) * IMBUFS_ENTRIES
 					, GFP_KERNEL);
 				if (!ppim_phys_bufs)
-					break;
+					goto alloc_error_page;
 			}
 
 			if (!ppim_phys_bufs[LV2IDX1(lv2base)]) {
@@ -179,7 +181,7 @@ static int ion_exynos_heap_allocate(struct ion_heap *heap,
 					sizeof(*pcur_bufs) * IMBUFS_ENTRIES,
 					GFP_KERNEL);
 				if (!ppim_phys_bufs[LV2IDX1(lv2base)])
-					break;
+					goto alloc_error_page;
 			}
 			pcur_bufs = ppim_phys_bufs[LV2IDX1(lv2base)];
 
@@ -188,11 +190,11 @@ static int ion_exynos_heap_allocate(struct ion_heap *heap,
 					sizeof(*cur_bufs) * IMBUFS_ENTRIES,
 					GFP_KERNEL);
 				if (!pcur_bufs[LV2IDX2(lv2base)])
-					break;
+					goto alloc_error_page;
 			}
 			cur_bufs = pcur_bufs[LV2IDX2(lv2base)];
 		} else {
-			break;
+			goto alloc_error_page;
 		}
 
 		*cur_bufs = page_to_phys(page) | *cur_order;
@@ -242,6 +244,10 @@ static int ion_exynos_heap_allocate(struct ion_heap *heap,
 	buffer->flags = flags;
 
 	return 0;
+alloc_error_page:
+	/* The page is not yet recorded in the chunk list below. */
+	__free_pages(page, *cur_order - PAGE_SHIFT);
+	ret = -ENOMEM;
 alloc_error:
 	copied = 0;
 	while (copied < alloc_chunks) {
