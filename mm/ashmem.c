@@ -71,7 +71,9 @@ static unsigned long lru_count;
 /*
  * ashmem_mutex - protects the list of and each individual ashmem_area
  *
- * Lock Ordering: ashmex_mutex -> i_mutex -> i_alloc_sem
+ * mmap() holds mmap_sem before taking ashmem_mutex. Never access user memory
+ * while holding ashmem_mutex: a page fault would try to take mmap_sem again.
+ * Lock Ordering: ashmem_mutex -> i_mutex -> i_alloc_sem
  */
 static DEFINE_MUTEX(ashmem_mutex);
 
@@ -293,6 +295,12 @@ static int ashmem_mmap(struct file *file, struct vm_area_struct *vma)
 		goto out;
 	}
 
+	/* Do not expose a mapping larger than its backing ashmem object. */
+	if (vma->vm_end - vma->vm_start > PAGE_ALIGN(asma->size)) {
+		ret = -EINVAL;
+		goto out;
+	}
+
 	/* requested protection bits must match our allowed protection mask */
 	if (unlikely((vma->vm_flags & ~calc_vm_prot_bits(asma->prot_mask)) &
 						calc_vm_prot_bits(PROT_MASK))) {
@@ -407,7 +415,16 @@ out:
 
 static int set_name(struct ashmem_area *asma, void __user *name)
 {
+	char lname[ASHMEM_NAME_LEN];
+	int len;
 	int ret = 0;
+
+	/* User access may fault and take mmap_sem; do it before locking. */
+	len = strncpy_from_user(lname, name, ASHMEM_NAME_LEN);
+	if (len < 0)
+		return len;
+	if (len == ASHMEM_NAME_LEN)
+		lname[ASHMEM_NAME_LEN - 1] = '\0';
 
 	mutex_lock(&ashmem_mutex);
 
@@ -417,10 +434,7 @@ static int set_name(struct ashmem_area *asma, void __user *name)
 		goto out;
 	}
 
-	if (unlikely(copy_from_user(asma->name + ASHMEM_NAME_PREFIX_LEN,
-				    name, ASHMEM_NAME_LEN)))
-		ret = -EFAULT;
-	asma->name[ASHMEM_FULL_NAME_LEN-1] = '\0';
+	strcpy(asma->name + ASHMEM_NAME_PREFIX_LEN, lname);
 
 out:
 	mutex_unlock(&ashmem_mutex);
@@ -430,28 +444,21 @@ out:
 
 static int get_name(struct ashmem_area *asma, void __user *name)
 {
-	int ret = 0;
+	char lname[ASHMEM_NAME_LEN];
+	size_t len;
 
 	mutex_lock(&ashmem_mutex);
 	if (asma->name[ASHMEM_NAME_PREFIX_LEN] != '\0') {
-		size_t len;
-
-		/*
-		 * Copying only `len', instead of ASHMEM_NAME_LEN, bytes
-		 * prevents us from revealing one user's stack to another.
-		 */
 		len = strlen(asma->name + ASHMEM_NAME_PREFIX_LEN) + 1;
-		if (unlikely(copy_to_user(name,
-				asma->name + ASHMEM_NAME_PREFIX_LEN, len)))
-			ret = -EFAULT;
+		memcpy(lname, asma->name + ASHMEM_NAME_PREFIX_LEN, len);
 	} else {
-		if (unlikely(copy_to_user(name, ASHMEM_NAME_DEF,
-					  sizeof(ASHMEM_NAME_DEF))))
-			ret = -EFAULT;
+		len = sizeof(ASHMEM_NAME_DEF);
+		memcpy(lname, ASHMEM_NAME_DEF, len);
 	}
 	mutex_unlock(&ashmem_mutex);
 
-	return ret;
+	/* Copy only the initialized name, without holding ashmem_mutex. */
+	return copy_to_user(name, lname, len) ? -EFAULT : 0;
 }
 
 /*
@@ -586,29 +593,29 @@ static int ashmem_pin_unpin(struct ashmem_area *asma, unsigned long cmd,
 	size_t pgstart, pgend;
 	int ret = -EINVAL;
 
-	if (unlikely(!asma->file))
-		return -EINVAL;
-
 	if (unlikely(copy_from_user(&pin, p, sizeof(pin))))
 		return -EFAULT;
+
+	mutex_lock(&ashmem_mutex);
+
+	if (unlikely(!asma->file))
+		goto out_unlock;
 
 	/* per custom, you can pass zero for len to mean "everything onward" */
 	if (!pin.len)
 		pin.len = PAGE_ALIGN(asma->size) - pin.offset;
 
 	if (unlikely((pin.offset | pin.len) & ~PAGE_MASK))
-		return -EINVAL;
+		goto out_unlock;
 
 	if (unlikely(((__u32) -1) - pin.offset < pin.len))
-		return -EINVAL;
+		goto out_unlock;
 
 	if (unlikely(PAGE_ALIGN(asma->size) < pin.offset + pin.len))
-		return -EINVAL;
+		goto out_unlock;
 
 	pgstart = pin.offset / PAGE_SIZE;
 	pgend = pgstart + (pin.len / PAGE_SIZE) - 1;
-
-	mutex_lock(&ashmem_mutex);
 
 	switch (cmd) {
 	case ASHMEM_PIN:
@@ -622,6 +629,7 @@ static int ashmem_pin_unpin(struct ashmem_area *asma, unsigned long cmd,
 		break;
 	}
 
+out_unlock:
 	mutex_unlock(&ashmem_mutex);
 
 	return ret;
@@ -641,10 +649,12 @@ static long ashmem_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 		break;
 	case ASHMEM_SET_SIZE:
 		ret = -EINVAL;
+		mutex_lock(&ashmem_mutex);
 		if (!asma->file) {
 			ret = 0;
 			asma->size = (size_t) arg;
 		}
+		mutex_unlock(&ashmem_mutex);
 		break;
 	case ASHMEM_GET_SIZE:
 		ret = asma->size;
