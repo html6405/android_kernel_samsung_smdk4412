@@ -204,17 +204,21 @@ static struct ion_handle *ion_handle_create(struct ion_client *client,
 	return handle;
 }
 
-static void ion_handle_destroy(struct kref *kref)
+/* The caller holds client->lock while dropping the final reference. */
+static void ion_handle_remove(struct kref *kref)
 {
 	struct ion_handle *handle = container_of(kref, struct ion_handle, ref);
+
+	if (!RB_EMPTY_NODE(&handle->node))
+		rb_erase(&handle->node, &handle->client->handles);
+}
+
+static void ion_handle_destroy(struct ion_handle *handle)
+{
 	/* XXX Can a handle be destroyed while it's map count is non-zero?:
 	   if (handle->map_cnt) unmap
 	 */
 	ion_buffer_put(handle->buffer);
-	mutex_lock(&handle->client->lock);
-	if (!RB_EMPTY_NODE(&handle->node))
-		rb_erase(&handle->node, &handle->client->handles);
-	mutex_unlock(&handle->client->lock);
 	kfree(handle);
 }
 
@@ -230,7 +234,21 @@ static void ion_handle_get(struct ion_handle *handle)
 
 static int ion_handle_put(struct ion_handle *handle)
 {
-	return kref_put(&handle->ref, ion_handle_destroy);
+	struct ion_client *client = handle->client;
+	int released;
+
+	/*
+	 * ion_import() looks up and gets a handle under this lock.  Drop the
+	 * last reference and remove it from the tree under the same lock, so
+	 * an importer can never resurrect a zero-reference handle.
+	 */
+	mutex_lock(&client->lock);
+	released = kref_put(&handle->ref, ion_handle_remove);
+	mutex_unlock(&client->lock);
+	if (released)
+		ion_handle_destroy(handle);
+
+	return released;
 }
 
 static struct ion_handle *ion_handle_lookup(struct ion_client *client,
@@ -878,7 +896,10 @@ static void _ion_client_destroy(struct kref *kref)
 	while ((n = rb_first(&client->handles))) {
 		struct ion_handle *handle = rb_entry(n, struct ion_handle,
 						     node);
-		ion_handle_destroy(&handle->ref);
+		mutex_lock(&client->lock);
+		ion_handle_remove(&handle->ref);
+		mutex_unlock(&client->lock);
+		ion_handle_destroy(handle);
 	}
 	mutex_lock(&dev->lock);
 	if (client->task) {
@@ -970,13 +991,16 @@ static void ion_vma_open(struct vm_area_struct *vma)
 		return;
 	}
 
+	mutex_lock(&client->lock);
 	if (!ion_handle_validate(client, handle)) {
+		mutex_unlock(&client->lock);
 		ion_client_put(client);
 		vma->vm_private_data = NULL;
 		return;
 	}
 
 	ion_handle_get(handle);
+	mutex_unlock(&client->lock);
 
 	pr_debug("%s: %d client_cnt %d handle_cnt %d alloc_cnt %d\n",
 		 __func__, __LINE__,
@@ -1003,11 +1027,6 @@ static void ion_vma_close(struct vm_area_struct *vma)
 		 atomic_read(&buffer->ref.refcount));
 	ion_handle_put(handle);
 	ion_client_put(client);
-	pr_debug("%s: %d client_cnt %d handle_cnt %d alloc_cnt %d\n",
-		 __func__, __LINE__,
-		 atomic_read(&client->ref.refcount),
-		 atomic_read(&handle->ref.refcount),
-		 atomic_read(&buffer->ref.refcount));
 }
 
 static struct vm_operations_struct ion_vm_ops = {
