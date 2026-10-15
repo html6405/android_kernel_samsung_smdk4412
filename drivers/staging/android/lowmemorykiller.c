@@ -97,7 +97,7 @@ static struct task_struct *pick_first_task(void);
 static struct task_struct *pick_last_task(void);
 #endif
 
-void tune_lmk_zone_param(struct zonelist *zonelist, int classzone_idx,
+static void tune_lmk_zone_param(struct zonelist *zonelist, int classzone_idx,
 					int *other_free, int *other_file)
 {
 	struct zone *zone;
@@ -113,9 +113,8 @@ void tune_lmk_zone_param(struct zonelist *zonelist, int classzone_idx,
 				*other_free -= zone_page_state(zone,
 							       NR_FREE_PAGES);
 			if (other_file != NULL)
-				*other_file -= zone_page_state(zone,
-							       NR_FILE_PAGES)
-					      - zone_page_state(zone, NR_SHMEM);
+				*other_file -= zone_page_state(zone, NR_ACTIVE_FILE)
+					     + zone_page_state(zone, NR_INACTIVE_FILE);
 		} else if (zone_idx < classzone_idx) {
 			if (zone_watermark_ok(zone, 0, 0, classzone_idx, 0))
 				*other_free -=
@@ -191,8 +190,8 @@ static int lowmem_shrink(struct shrinker *s, struct shrink_control *sc)
 	int other_free = global_page_state(NR_FREE_PAGES) -
 					global_page_state(NR_FREE_CMA_PAGES);
 #endif
-	int other_file = global_page_state(NR_FILE_PAGES) -
-						global_page_state(NR_SHMEM);
+	int other_file = global_page_state(NR_ACTIVE_FILE) +
+			 global_page_state(NR_INACTIVE_FILE);
 
 	/*
 	 * If we already have a death outstanding, then
