@@ -92,6 +92,22 @@ task_notify_func(struct notifier_block *self, unsigned long val, void *data)
 	return NOTIFY_OK;
 }
 
+static bool lowmem_task_is_dying(struct task_struct *task)
+{
+	struct task_struct *thread;
+
+	for_each_thread(task, thread) {
+		task_lock(thread);
+		if (test_tsk_thread_flag(thread, TIF_MEMDIE)) {
+			task_unlock(thread);
+			return true;
+		}
+		task_unlock(thread);
+	}
+
+	return false;
+}
+
 #ifdef CONFIG_ANDROID_LMK_ADJ_RBTREE
 static struct task_struct *pick_next_from_adj_tree(struct task_struct *task);
 static struct task_struct *pick_first_task(void);
@@ -287,6 +303,8 @@ static int lowmem_shrink(struct shrinker *s, struct shrink_control *sc)
 		struct task_struct *p;
 		int oom_score_adj;
 		if (tsk->flags & PF_KTHREAD)
+			continue;
+		if (lowmem_task_is_dying(tsk))
 			continue;
 
 		p = find_lock_task_mm(tsk);
