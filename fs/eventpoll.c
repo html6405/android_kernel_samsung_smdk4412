@@ -1547,7 +1547,7 @@ check_events:
 }
 
 static int ep_poll2(struct eventpoll *ep, struct epoll_event __user *events,
-		   int maxevents, struct timespec timeout, bool has_timeout)
+		   int maxevents, const struct timespec *timeout)
 {
 	int res = 0, eavail, timed_out = 0;
 	unsigned long flags;
@@ -1555,17 +1555,18 @@ static int ep_poll2(struct eventpoll *ep, struct epoll_event __user *events,
 	wait_queue_t wait;
 	ktime_t expires, *to = NULL;
 
-	if (has_timeout) {
+	if (timeout && (timeout->tv_sec || timeout->tv_nsec)) {
 		struct timespec end_time, now;
 		ktime_get_ts(&now);
-		end_time = timespec_add_safe(now, timeout);
+		end_time = timespec_add_safe(now, *timeout);
 		slack = select_estimate_accuracy(&end_time);
 		to = &expires;
 		*to = timespec_to_ktime(end_time);
-	} else if (!has_timeout) {
+	} else if (timeout) {
 		/*
 		 * Avoid the unnecessary trip to the wait queue loop, if the
-		 * caller specified a non blocking operation.
+		 * caller specified a zero (nonblocking) timeout. A NULL timeout
+		 * instead waits indefinitely, as in epoll_pwait2 on newer kernels.
 		 */
 		timed_out = 1;
 		spin_lock_irqsave(&ep->lock, flags);
@@ -2019,7 +2020,7 @@ struct __kernel_timespec {
 	long long               tv_nsec;                /* nanoseconds */
 };
 
-int get_timespec(struct timespec *ts,
+static int get_timespec(struct timespec *ts,
 		   const struct __kernel_timespec __user *uts)
 {
 	struct __kernel_timespec kts;
@@ -2028,6 +2029,9 @@ int get_timespec(struct timespec *ts,
 	ret = copy_from_user(&kts, uts, sizeof(kts));
 	if (ret)
 		return -EFAULT;
+	if (kts.tv_sec < 0 || kts.tv_sec > LONG_MAX ||
+	    kts.tv_nsec < 0 || kts.tv_nsec >= NSEC_PER_SEC)
+		return -EINVAL;
 
 	ts->tv_sec = (long)kts.tv_sec;
 	ts->tv_nsec = (long)kts.tv_nsec;
@@ -2036,7 +2040,7 @@ int get_timespec(struct timespec *ts,
 }
 
 int epoll_wait_ts(int epfd, struct epoll_event __user * events,
-		int maxevents, struct timespec timeout, bool has_timeout)
+		int maxevents, const struct timespec *timeout)
 {
 	int error;
 	struct file *file;
@@ -2073,7 +2077,7 @@ int epoll_wait_ts(int epfd, struct epoll_event __user * events,
 	ep = file->private_data;
 
 	/* Time to fish for events ... */
-	error = ep_poll2(ep, events, maxevents, timeout, has_timeout);
+	error = ep_poll2(ep, events, maxevents, timeout);
 
 error_fput:
 	fput(file);
@@ -2092,8 +2096,9 @@ SYSCALL_DEFINE6(epoll_pwait2, int, epfd, struct epoll_event __user *, events,
 	struct timespec ts;
 
 	if (timeout) {
-		if (get_timespec(&ts, timeout))
-			return -EFAULT;
+		error = get_timespec(&ts, timeout);
+		if (error)
+			return error;
 	}
 
 	/*
@@ -2109,7 +2114,8 @@ SYSCALL_DEFINE6(epoll_pwait2, int, epfd, struct epoll_event __user *, events,
 		sigprocmask(SIG_SETMASK, &ksigmask, &sigsaved);
 	}
 
-	error = epoll_wait_ts(epfd, events, maxevents, ts, (timeout ? true : false));
+	error = epoll_wait_ts(epfd, events, maxevents,
+			      timeout ? &ts : NULL);
 
 	/*
 	 * If we changed the signal mask, we need to restore the original one.
