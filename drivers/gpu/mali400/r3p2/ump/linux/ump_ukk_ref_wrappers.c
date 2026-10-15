@@ -28,9 +28,20 @@
 #include "mali_osk_list.h"
 #ifdef CONFIG_ION_EXYNOS
 #include <linux/ion.h>
+#include <linux/mutex.h>
 #include "../../../../gpu/ion/ion_priv.h"
 extern struct ion_device *ion_exynos;
 extern struct ion_client *ion_client_ump;
+
+static DEFINE_MUTEX(ump_ion_client_lock);
+
+/* The UMP descriptor owns this ION import until its final reference dies. */
+static void ump_ion_import_release(void *ctx, struct ump_dd_mem *descriptor)
+{
+	_mali_osk_free(descriptor->block_array);
+	descriptor->block_array = NULL;
+	ion_free(ion_client_ump, ctx);
+}
 #endif
 #ifdef CONFIG_DMA_SHARED_BUFFER
 #include <linux/dma-buf.h>
@@ -105,11 +116,11 @@ int ump_ion_import_wrapper(u32 __user * argument, struct ump_session_data  * ses
 	struct ion_handle *ion_hnd;
 	struct scatterlist *sg;
 	struct scatterlist *sg_ion;
+	unsigned long block_size;
 	unsigned long i = 0;
+	int ret;
 
 	ump_session_memory_list_element * session_memory_element = NULL;
-	if (ion_client_ump==NULL)
-	    ion_client_ump = ion_client_create(ion_exynos, -1, "ump");
 
 	/* Sanity check input parameters */
 	if (NULL == argument || NULL == session_data)
@@ -127,57 +138,96 @@ int ump_ion_import_wrapper(u32 __user * argument, struct ump_session_data  * ses
 
 	user_interaction.ctx = (void *) session_data;
 
+	mutex_lock(&ump_ion_client_lock);
+	if (NULL == ion_client_ump)
+	{
+		ion_client_ump = ion_client_create(ion_exynos, -1, "ump");
+		if (IS_ERR(ion_client_ump))
+		{
+			ret = PTR_ERR(ion_client_ump);
+			ion_client_ump = NULL;
+			mutex_unlock(&ump_ion_client_lock);
+			MSG_ERR(("ion_client_create() failed in ump_ion_import_wrapper()\n"));
+			return ret;
+		}
+	}
+	mutex_unlock(&ump_ion_client_lock);
+
 	/* translate fd to secure ID*/
 	ion_hnd = ion_import_fd(ion_client_ump, user_interaction.ion_fd);
-	sg_ion = ion_map_dma(ion_client_ump,ion_hnd);
-
-	blocks = (ump_dd_physical_block*)_mali_osk_malloc(sizeof(ump_dd_physical_block)*1024);
-
-	if (NULL == blocks) {
-		MSG_ERR(("Failed to allocate blocks in ump_ioctl_allocate()\n"));
-		return -ENOMEM;
+	if (IS_ERR(ion_hnd))
+	{
+		ret = PTR_ERR(ion_hnd);
+		MSG_ERR(("ion_import_fd() failed in ump_ion_import_wrapper()\n"));
+		return ret;
 	}
 
-	sg = sg_ion;
-	do {
+	sg_ion = ion_map_dma(ion_client_ump,ion_hnd);
+	if (IS_ERR_OR_NULL(sg_ion))
+	{
+		ret = NULL == sg_ion ? -ENOMEM : PTR_ERR(sg_ion);
+		MSG_ERR(("ion_map_dma() failed in ump_ion_import_wrapper()\n"));
+		goto err_free_ion;
+	}
+
+	num_blocks = 0;
+	for (sg = sg_ion; NULL != sg; sg = sg_next(sg))
+	{
+		num_blocks++;
+	}
+
+	if (0 == num_blocks)
+	{
+		ret = -EINVAL;
+		MSG_ERR(("Empty scatterlist in ump_ion_import_wrapper()\n"));
+		goto err_unmap_ion;
+	}
+
+	if (num_blocks > (~0U / sizeof(*blocks)))
+	{
+		ret = -EOVERFLOW;
+		MSG_ERR(("Scatterlist too large in ump_ion_import_wrapper()\n"));
+		goto err_unmap_ion;
+	}
+
+	block_size = sizeof(*blocks) * num_blocks;
+	blocks = (ump_dd_physical_block*)_mali_osk_malloc(block_size);
+
+	if (NULL == blocks) {
+		ret = -ENOMEM;
+		MSG_ERR(("Failed to allocate blocks in ump_ion_import_wrapper()\n"));
+		goto err_unmap_ion;
+	}
+
+	for (sg = sg_ion; NULL != sg; sg = sg_next(sg))
+	{
 		blocks[i].addr = sg_phys(sg);
 		blocks[i].size = sg_dma_len(sg);
 		i++;
-		if (i>=1024) {
-			_mali_osk_free(blocks);
-			MSG_ERR(("ion_import fail() in ump_ioctl_allocate()\n"));
-			return -EFAULT;
-		}
-		sg = sg_next(sg);
-	} while(sg);
-
-	num_blocks = i;
+	}
 
 	/* Initialize the session_memory_element, and add it to the session object */
 	session_memory_element = _mali_osk_calloc( 1, sizeof(ump_session_memory_list_element));
 
 	if (NULL == session_memory_element)
 	{
-		_mali_osk_free(blocks);
-		DBG_MSG(1, ("Failed to allocate ump_session_memory_list_element in ump_ioctl_allocate()\n"));
-		return -EFAULT;
+		ret = -ENOMEM;
+		DBG_MSG(1, ("Failed to allocate ump_session_memory_list_element in ump_ion_import_wrapper()\n"));
+		goto err_free_blocks;
 	}
 
 	ump_handle = ump_dd_handle_create_from_phys_blocks(blocks, num_blocks);
 	if (UMP_DD_HANDLE_INVALID == ump_handle)
 	{
-		_mali_osk_free(session_memory_element);
-		_mali_osk_free(blocks);
-		DBG_MSG(1, ("Failed to allocate ump_session_memory_list_element in ump_ioctl_allocate()\n"));
-		return -EFAULT;
+		ret = -ENOMEM;
+		DBG_MSG(1, ("Failed to create UMP handle in ump_ion_import_wrapper()\n"));
+		goto err_free_session;
 	}
 
-	session_memory_element->mem = (ump_dd_mem*)ump_handle;
-	_mali_osk_lock_wait(session_data->lock, _MALI_OSK_LOCKMODE_RW);
-	_mali_osk_list_add(&(session_memory_element->list), &(session_data->list_head_session_memory_list));
-	_mali_osk_lock_signal(session_data->lock, _MALI_OSK_LOCKMODE_RW);
 	ion_unmap_dma(ion_client_ump,ion_hnd);
-	ion_free(ion_client_ump, ion_hnd);
+	/* The physical block copy alone cannot pin the underlying ION pages. */
+	((ump_dd_mem *)ump_handle)->ctx = ion_hnd;
+	((ump_dd_mem *)ump_handle)->release_func = ump_ion_import_release;
 
 	_mali_osk_free(blocks);
 
@@ -187,13 +237,27 @@ int ump_ion_import_wrapper(u32 __user * argument, struct ump_session_data  * ses
 
 	if (0 != copy_to_user(argument, &user_interaction, sizeof(user_interaction)))
 	{
-		/* If the copy fails then we should release the memory. We can use the IOCTL release to accomplish this */
-
 		MSG_ERR(("copy_to_user() failed in ump_ioctl_allocate()\n"));
-
+		ump_dd_reference_release(ump_handle);
+		_mali_osk_free(session_memory_element);
 		return -EFAULT;
 	}
+
+	session_memory_element->mem = (ump_dd_mem*)ump_handle;
+	_mali_osk_lock_wait(session_data->lock, _MALI_OSK_LOCKMODE_RW);
+	_mali_osk_list_add(&(session_memory_element->list), &(session_data->list_head_session_memory_list));
+	_mali_osk_lock_signal(session_data->lock, _MALI_OSK_LOCKMODE_RW);
 	return 0; /* success */
+
+err_free_session:
+	_mali_osk_free(session_memory_element);
+err_free_blocks:
+	_mali_osk_free(blocks);
+err_unmap_ion:
+	ion_unmap_dma(ion_client_ump, ion_hnd);
+err_free_ion:
+	ion_free(ion_client_ump, ion_hnd);
+	return ret;
 }
 #endif
 
