@@ -36,7 +36,8 @@ static int check_quotactl_permission(struct super_block *sb, int type, int cmd,
 	case Q_GETQUOTA:
 	case Q_XGETQUOTA:
 		if ((type == USRQUOTA && current_euid() == id) ||
-		    (type == GRPQUOTA && in_egroup_p(id)))
+		    (type == GRPQUOTA && in_egroup_p(id)) ||
+		    type == PRJQUOTA)
 			break;
 		/*FALLTHROUGH*/
 	default:

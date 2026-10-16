@@ -1142,6 +1142,8 @@ static int need_print_warning(struct dquot_warn *warn)
 			return current_fsuid() == warn->w_dq_id;
 		case GRPQUOTA:
 			return in_group_p(warn->w_dq_id);
+		case PRJQUOTA:
+			return 1;
 	}
 	return 0;
 }
@@ -1395,6 +1397,11 @@ static void __dquot_initialize(struct inode *inode, int type)
 			break;
 		case GRPQUOTA:
 			id = inode->i_gid;
+			break;
+		case PRJQUOTA:
+			if (!sb->dq_op || !sb->dq_op->get_projid ||
+			    sb->dq_op->get_projid(inode, &id))
+				continue;
 			break;
 		}
 		got[cnt] = dqget(sb, id, cnt);
@@ -2103,7 +2110,9 @@ static int vfs_load_quota_inode(struct inode *inode, int type, int format_id,
 		error = -EROFS;
 		goto out_fmt;
 	}
-	if (!sb->s_op->quota_write || !sb->s_op->quota_read) {
+	if (!sb->s_op->quota_write || !sb->s_op->quota_read ||
+	    (type == PRJQUOTA &&
+	     (!sb->dq_op || !sb->dq_op->get_projid))) {
 		error = -EINVAL;
 		goto out_fmt;
 	}
@@ -2344,8 +2353,19 @@ static void do_get_dqblk(struct dquot *dquot, struct fs_disk_quota *di)
 
 	memset(di, 0, sizeof(*di));
 	di->d_version = FS_DQUOT_VERSION;
-	di->d_flags = dquot->dq_type == USRQUOTA ?
-			FS_USER_QUOTA : FS_GROUP_QUOTA;
+	switch (dquot->dq_type) {
+	case USRQUOTA:
+		di->d_flags = FS_USER_QUOTA;
+		break;
+	case GRPQUOTA:
+		di->d_flags = FS_GROUP_QUOTA;
+		break;
+	case PRJQUOTA:
+		di->d_flags = FS_PROJ_QUOTA;
+		break;
+	default:
+		BUG();
+	}
 	di->d_id = dquot->dq_id;
 
 	spin_lock(&dq_data_lock);

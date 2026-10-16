@@ -130,6 +130,9 @@ static int v1_check_quota_file(struct super_block *sb, int type)
 	loff_t isize;
 	static const uint quota_magics[] = V2_INITQMAGICS;
 
+	if (type == PRJQUOTA)
+		return 0;
+
 	isize = i_size_read(inode);
 	if (!isize)
 		return 0;
@@ -230,4 +233,3 @@ static void __exit exit_v1_quota_format(void)
 
 module_init(init_v1_quota_format);
 module_exit(exit_v1_quota_format);
-
