@@ -605,6 +605,35 @@ enum {
 #define EXT4_IOC_MOVE_EXT		_IOWR('f', 15, struct move_extent)
 #define EXT4_IOC_RESIZE_FS		_IOW('f', 16, __u64)
 
+struct fsxattr {
+	__u32		fsx_xflags;
+	__u32		fsx_extsize;
+	__u32		fsx_nextents;
+	__u32		fsx_projid;
+	unsigned char	fsx_pad[12];
+};
+
+#define FS_IOC_FSGETXATTR		_IOR('X', 31, struct fsxattr)
+#define FS_IOC_FSSETXATTR		_IOW('X', 32, struct fsxattr)
+#define FS_XFLAG_REALTIME		0x00000001
+#define FS_XFLAG_PREALLOC		0x00000002
+#define FS_XFLAG_IMMUTABLE		0x00000008
+#define FS_XFLAG_APPEND			0x00000010
+#define FS_XFLAG_SYNC			0x00000020
+#define FS_XFLAG_NOATIME		0x00000040
+#define FS_XFLAG_NODUMP			0x00000080
+#define FS_XFLAG_RTINHERIT		0x00000100
+#define FS_XFLAG_PROJINHERIT		0x00000200
+#define FS_XFLAG_NOSYMLINKS		0x00000400
+#define FS_XFLAG_EXTSIZE		0x00000800
+#define FS_XFLAG_EXTSZINHERIT		0x00001000
+#define FS_XFLAG_NODEFRAG		0x00002000
+#define FS_XFLAG_FILESTREAM		0x00004000
+#define FS_XFLAG_HASATTR		0x80000000
+
+#define EXT4_IOC_FSGETXATTR		FS_IOC_FSGETXATTR
+#define EXT4_IOC_FSSETXATTR		FS_IOC_FSSETXATTR
+
 #if defined(__KERNEL__) && defined(CONFIG_COMPAT)
 /*
  * ioctl commands in 32 bit emulation

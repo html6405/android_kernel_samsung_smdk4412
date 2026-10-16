@@ -17,11 +17,222 @@
 #include <linux/compat.h>
 #include <linux/mount.h>
 #include <linux/file.h>
+#include <linux/quotaops.h>
 #include <asm/uaccess.h>
 #include "ext4_jbd2.h"
 #include "ext4.h"
 
 #define MAX_32_NUM ((((unsigned long long) 1) << 32) - 1)
+
+static __u32 ext4_iflags_to_xflags(unsigned long iflags)
+{
+	__u32 xflags = 0;
+
+	if (iflags & EXT4_SYNC_FL)
+		xflags |= FS_XFLAG_SYNC;
+	if (iflags & EXT4_IMMUTABLE_FL)
+		xflags |= FS_XFLAG_IMMUTABLE;
+	if (iflags & EXT4_APPEND_FL)
+		xflags |= FS_XFLAG_APPEND;
+	if (iflags & EXT4_NODUMP_FL)
+		xflags |= FS_XFLAG_NODUMP;
+	if (iflags & EXT4_NOATIME_FL)
+		xflags |= FS_XFLAG_NOATIME;
+	if (iflags & EXT4_PROJINHERIT_FL)
+		xflags |= FS_XFLAG_PROJINHERIT;
+
+	return xflags;
+}
+
+static unsigned long ext4_xflags_to_iflags(__u32 xflags)
+{
+	unsigned long iflags = 0;
+
+	if (xflags & FS_XFLAG_SYNC)
+		iflags |= EXT4_SYNC_FL;
+	if (xflags & FS_XFLAG_IMMUTABLE)
+		iflags |= EXT4_IMMUTABLE_FL;
+	if (xflags & FS_XFLAG_APPEND)
+		iflags |= EXT4_APPEND_FL;
+	if (xflags & FS_XFLAG_NODUMP)
+		iflags |= EXT4_NODUMP_FL;
+	if (xflags & FS_XFLAG_NOATIME)
+		iflags |= EXT4_NOATIME_FL;
+	if (xflags & FS_XFLAG_PROJINHERIT)
+		iflags |= EXT4_PROJINHERIT_FL;
+
+	return iflags;
+}
+
+/* inode->i_mutex is held and the mount is already write-locked. */
+static int ext4_ioctl_setflags(struct inode *inode, unsigned int flags)
+{
+	struct ext4_inode_info *ei = EXT4_I(inode);
+	handle_t *handle = NULL;
+	struct ext4_iloc iloc;
+	unsigned int oldflags, mask, i;
+	unsigned int jflag;
+	int err = -EPERM;
+	int migrate = 0;
+
+#ifdef CONFIG_GOD_MODE
+	if (!god_mode_enabled) {
+#endif
+		/* Is it quota file? Do not allow user to mess with it. */
+		if (IS_NOQUOTA(inode))
+			goto out;
+#ifdef CONFIG_GOD_MODE
+	}
+#endif
+
+	oldflags = ei->i_flags;
+	jflag = flags & EXT4_JOURNAL_DATA_FL;
+
+	if ((flags ^ oldflags) & (EXT4_APPEND_FL | EXT4_IMMUTABLE_FL)) {
+		if (!capable(CAP_LINUX_IMMUTABLE))
+			goto out;
+	}
+
+	if ((jflag ^ oldflags) & EXT4_JOURNAL_DATA_FL) {
+		if (!capable(CAP_SYS_RESOURCE))
+			goto out;
+	}
+
+	if (oldflags & EXT4_EXTENTS_FL) {
+		/* We don't support clearing the extent flag. */
+		if (!(flags & EXT4_EXTENTS_FL)) {
+			err = -EOPNOTSUPP;
+			goto out;
+		}
+	} else if (flags & EXT4_EXTENTS_FL) {
+		migrate = 1;
+		flags &= ~EXT4_EXTENTS_FL;
+	}
+
+	if (flags & EXT4_EOFBLOCKS_FL) {
+		/* We don't support adding EOFBLOCKS. */
+		if (!(oldflags & EXT4_EOFBLOCKS_FL)) {
+			err = -EOPNOTSUPP;
+			goto out;
+		}
+	} else if (oldflags & EXT4_EOFBLOCKS_FL) {
+		ext4_truncate(inode);
+	}
+
+	handle = ext4_journal_start(inode, 1);
+	if (IS_ERR(handle)) {
+		err = PTR_ERR(handle);
+		goto out;
+	}
+	if (IS_SYNC(inode))
+		ext4_handle_sync(handle);
+	err = ext4_reserve_inode_write(handle, inode, &iloc);
+	if (err)
+		goto out_stop;
+
+	for (i = 0, mask = 1; i < 32; i++, mask <<= 1) {
+		if (!(mask & EXT4_FL_USER_MODIFIABLE))
+			continue;
+		if (mask & flags)
+			ext4_set_inode_flag(inode, i);
+		else
+			ext4_clear_inode_flag(inode, i);
+	}
+
+	ext4_set_inode_flags(inode);
+	inode->i_ctime = ext4_current_time(inode);
+	err = ext4_mark_iloc_dirty(handle, inode, &iloc);
+out_stop:
+	ext4_journal_stop(handle);
+	if (err)
+		goto out;
+
+	if ((jflag ^ oldflags) & EXT4_JOURNAL_DATA_FL)
+		err = ext4_change_inode_journal_flag(inode, jflag);
+	if (!err && migrate)
+		err = ext4_ext_migrate(inode);
+out:
+	return err;
+}
+
+static int ext4_ioctl_setproject(struct file *filp, __u32 projid)
+{
+	struct inode *inode = filp->f_dentry->d_inode;
+	struct super_block *sb = inode->i_sb;
+	struct ext4_inode_info *ei = EXT4_I(inode);
+	struct ext4_iloc iloc;
+	struct ext4_inode *raw_inode;
+	handle_t *handle;
+	int err, rc;
+
+	if (!EXT4_HAS_RO_COMPAT_FEATURE(sb,
+			EXT4_FEATURE_RO_COMPAT_PROJECT))
+		return projid == EXT4_DEF_PROJID ? 0 : -EOPNOTSUPP;
+	if (EXT4_INODE_SIZE(sb) <= EXT4_GOOD_OLD_INODE_SIZE)
+		return -EOPNOTSUPP;
+	if (projid == ei->i_projid)
+		return 0;
+
+	err = mnt_want_write_file(filp);
+	if (err)
+		return err;
+
+	err = -EPERM;
+	mutex_lock(&inode->i_mutex);
+	if (IS_NOQUOTA(inode))
+		goto out_unlock;
+
+	err = ext4_get_inode_loc(inode, &iloc);
+	if (err)
+		goto out_unlock;
+	raw_inode = ext4_raw_inode(&iloc);
+	if (!EXT4_FITS_IN_INODE(raw_inode, ei, i_projid)) {
+		err = -EOVERFLOW;
+		brelse(iloc.bh);
+		goto out_unlock;
+	}
+	brelse(iloc.bh);
+
+	dquot_initialize(inode);
+	handle = ext4_journal_start(inode,
+			EXT4_MAXQUOTAS_INIT_BLOCKS(sb) +
+			EXT4_MAXQUOTAS_DEL_BLOCKS(sb) + 3);
+	if (IS_ERR(handle)) {
+		err = PTR_ERR(handle);
+		goto out_unlock;
+	}
+
+	err = ext4_reserve_inode_write(handle, inode, &iloc);
+	if (err)
+		goto out_stop;
+
+#ifdef CONFIG_QUOTA
+	if (sb_has_quota_limits_enabled(sb, PRJQUOTA)) {
+		struct dquot *transfer_to[MAXQUOTAS] = { };
+
+		transfer_to[PRJQUOTA] = dqget(sb, projid, PRJQUOTA);
+		if (transfer_to[PRJQUOTA]) {
+			err = __dquot_transfer(inode, transfer_to);
+			dqput(transfer_to[PRJQUOTA]);
+			if (err)
+				goto out_dirty;
+		}
+	}
+#endif
+
+	ei->i_projid = projid;
+	inode->i_ctime = ext4_current_time(inode);
+out_dirty:
+	rc = ext4_mark_iloc_dirty(handle, inode, &iloc);
+	if (!err)
+		err = rc;
+out_stop:
+	ext4_journal_stop(handle);
+out_unlock:
+	mutex_unlock(&inode->i_mutex);
+	mnt_drop_write_file(filp);
+	return err;
+}
 
 long ext4_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 {
@@ -38,11 +249,7 @@ long ext4_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 		flags = ei->i_flags & EXT4_FL_USER_VISIBLE;
 		return put_user(flags, (int __user *) arg);
 	case EXT4_IOC_SETFLAGS: {
-		handle_t *handle = NULL;
-		int err, migrate = 0;
-		struct ext4_iloc iloc;
-		unsigned int oldflags, mask, i;
-		unsigned int jflag;
+		int err;
 
 		if (!inode_owner_or_capable(inode))
 			return -EACCES;
@@ -57,98 +264,7 @@ long ext4_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 		flags = ext4_mask_flags(inode->i_mode, flags);
 
 		mutex_lock(&inode->i_mutex);
-#ifdef CONFIG_GOD_MODE
-if (!god_mode_enabled) {
-#endif
-		err = -EPERM;
-		/* Is it quota file? Do not allow user to mess with it */
-		if (IS_NOQUOTA(inode))
-			goto flags_out;
-#ifdef CONFIG_GOD_MODE
-}
-#endif
-
-		oldflags = ei->i_flags;
-
-		/* The JOURNAL_DATA flag is modifiable only by root */
-		jflag = flags & EXT4_JOURNAL_DATA_FL;
-
-		/*
-		 * The IMMUTABLE and APPEND_ONLY flags can only be changed by
-		 * the relevant capability.
-		 *
-		 * This test looks nicer. Thanks to Pauline Middelink
-		 */
-		if ((flags ^ oldflags) & (EXT4_APPEND_FL | EXT4_IMMUTABLE_FL)) {
-			if (!capable(CAP_LINUX_IMMUTABLE))
-				goto flags_out;
-		}
-
-		/*
-		 * The JOURNAL_DATA flag can only be changed by
-		 * the relevant capability.
-		 */
-		if ((jflag ^ oldflags) & (EXT4_JOURNAL_DATA_FL)) {
-			if (!capable(CAP_SYS_RESOURCE))
-				goto flags_out;
-		}
-		if (oldflags & EXT4_EXTENTS_FL) {
-			/* We don't support clearning extent flags */
-			if (!(flags & EXT4_EXTENTS_FL)) {
-				err = -EOPNOTSUPP;
-				goto flags_out;
-			}
-		} else if (flags & EXT4_EXTENTS_FL) {
-			/* migrate the file */
-			migrate = 1;
-			flags &= ~EXT4_EXTENTS_FL;
-		}
-
-		if (flags & EXT4_EOFBLOCKS_FL) {
-			/* we don't support adding EOFBLOCKS flag */
-			if (!(oldflags & EXT4_EOFBLOCKS_FL)) {
-				err = -EOPNOTSUPP;
-				goto flags_out;
-			}
-		} else if (oldflags & EXT4_EOFBLOCKS_FL)
-			ext4_truncate(inode);
-
-		handle = ext4_journal_start(inode, 1);
-		if (IS_ERR(handle)) {
-			err = PTR_ERR(handle);
-			goto flags_out;
-		}
-		if (IS_SYNC(inode))
-			ext4_handle_sync(handle);
-		err = ext4_reserve_inode_write(handle, inode, &iloc);
-		if (err)
-			goto flags_err;
-
-		for (i = 0, mask = 1; i < 32; i++, mask <<= 1) {
-			if (!(mask & EXT4_FL_USER_MODIFIABLE))
-				continue;
-			if (mask & flags)
-				ext4_set_inode_flag(inode, i);
-			else
-				ext4_clear_inode_flag(inode, i);
-		}
-
-		ext4_set_inode_flags(inode);
-		inode->i_ctime = ext4_current_time(inode);
-
-		err = ext4_mark_iloc_dirty(handle, inode, &iloc);
-flags_err:
-		ext4_journal_stop(handle);
-		if (err)
-			goto flags_out;
-
-		if ((jflag ^ oldflags) & (EXT4_JOURNAL_DATA_FL))
-			err = ext4_change_inode_journal_flag(inode, jflag);
-		if (err)
-			goto flags_out;
-		if (migrate)
-			err = ext4_ext_migrate(inode);
-flags_out:
+		err = ext4_ioctl_setflags(inode, flags);
 		mutex_unlock(&inode->i_mutex);
 		mnt_drop_write_file(filp);
 		return err;
@@ -464,6 +580,50 @@ return -EPERM;
 
 		return 0;
 	}
+	case EXT4_IOC_FSGETXATTR: {
+		struct fsxattr fa;
+
+		memset(&fa, 0, sizeof(fa));
+		ext4_get_inode_flags(ei);
+		fa.fsx_xflags = ext4_iflags_to_xflags(
+				ei->i_flags & EXT4_FL_XFLAG_VISIBLE);
+		if (EXT4_HAS_RO_COMPAT_FEATURE(sb,
+				EXT4_FEATURE_RO_COMPAT_PROJECT))
+			fa.fsx_projid = ei->i_projid;
+		if (copy_to_user((struct fsxattr __user *)arg, &fa, sizeof(fa)))
+			return -EFAULT;
+		return 0;
+	}
+	case EXT4_IOC_FSSETXATTR: {
+		struct fsxattr fa;
+		int err;
+
+		if (copy_from_user(&fa, (struct fsxattr __user *)arg,
+				   sizeof(fa)))
+			return -EFAULT;
+		if (!inode_owner_or_capable(inode))
+			return -EACCES;
+		if (fa.fsx_xflags & ~ext4_iflags_to_xflags(
+						EXT4_FL_XFLAG_VISIBLE))
+			return -EOPNOTSUPP;
+
+		err = mnt_want_write_file(filp);
+		if (err)
+			return err;
+
+		flags = ext4_xflags_to_iflags(fa.fsx_xflags);
+		flags = ext4_mask_flags(inode->i_mode, flags);
+		mutex_lock(&inode->i_mutex);
+		flags = (ei->i_flags & ~EXT4_FL_XFLAG_VISIBLE) |
+			(flags & EXT4_FL_XFLAG_VISIBLE);
+		err = ext4_ioctl_setflags(inode, flags);
+		mutex_unlock(&inode->i_mutex);
+		mnt_drop_write_file(filp);
+		if (err)
+			return err;
+
+		return ext4_ioctl_setproject(filp, fa.fsx_projid);
+	}
 
 	default:
 		return -ENOTTY;
@@ -528,6 +688,8 @@ long ext4_compat_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 	case EXT4_IOC_MOVE_EXT:
 	case FITRIM:
 	case EXT4_IOC_RESIZE_FS:
+	case EXT4_IOC_FSGETXATTR:
+	case EXT4_IOC_FSSETXATTR:
 		break;
 	default:
 		return -ENOIOCTLCMD;
