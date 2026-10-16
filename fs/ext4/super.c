@@ -1089,7 +1089,8 @@ static int bdev_try_to_free_page(struct super_block *sb, struct page *page,
 }
 
 #ifdef CONFIG_QUOTA
-#define QTYPE2NAME(t) ((t) == USRQUOTA ? "user" : "group")
+static const char *quotatypes[] = INITQFNAMES;
+#define QTYPE2NAME(t) (quotatypes[(t)])
 #define QTYPE2MOPT(on, t) ((t) == USRQUOTA?((on)##USRJQUOTA):((on)##GRPJQUOTA))
 
 static int ext4_write_dquot(struct dquot *dquot);
@@ -2575,6 +2576,14 @@ static int ext4_feature_set_ok(struct super_block *sb, int readonly)
 			 "extents feature\n");
 		return 0;
 	}
+#ifndef CONFIG_QUOTA
+	if (EXT4_HAS_RO_COMPAT_FEATURE(sb,
+			EXT4_FEATURE_RO_COMPAT_PROJECT)) {
+		ext4_msg(sb, KERN_ERR, "filesystem with project quota feature "
+			 "cannot be mounted read-write without CONFIG_QUOTA");
+		return 0;
+	}
+#endif
 	return 1;
 }
 
@@ -4688,7 +4697,8 @@ static int ext4_mark_dquot_dirty(struct dquot *dquot)
 {
 	/* Are we journaling quotas? */
 	if (EXT4_SB(dquot->dq_sb)->s_qf_names[USRQUOTA] ||
-	    EXT4_SB(dquot->dq_sb)->s_qf_names[GRPQUOTA]) {
+	    EXT4_SB(dquot->dq_sb)->s_qf_names[GRPQUOTA] ||
+	    EXT4_SB(dquot->dq_sb)->s_qf_names[PRJQUOTA]) {
 		dquot_mark_dquot_dirty(dquot);
 		return ext4_write_dquot(dquot);
 	} else {
