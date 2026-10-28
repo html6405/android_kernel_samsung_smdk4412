@@ -1211,27 +1211,40 @@ group_sched_out(struct perf_event *group_event,
  * We disable the event on the hardware level first. After that we
  * remove it from the context list.
  */
-static int __perf_remove_from_context(void *info)
+static void perf_remove_event(struct perf_event *event, bool detach_group)
 {
-	struct perf_event *event = info;
 	struct perf_event_context *ctx = event->ctx;
 	struct perf_cpu_context *cpuctx = __get_cpu_context(ctx);
 
 	raw_spin_lock(&ctx->lock);
 	event_sched_out(event, cpuctx, ctx);
+	if (detach_group)
+		perf_group_detach(event);
 	list_del_event(event, ctx);
 	if (!ctx->nr_events && cpuctx->task_ctx == ctx) {
 		ctx->is_active = 0;
 		cpuctx->task_ctx = NULL;
 	}
 	raw_spin_unlock(&ctx->lock);
+}
 
+struct remove_event {
+	struct perf_event *event;
+	bool detach_group;
+};
+
+static int __perf_remove_from_context(void *info)
+{
+	struct remove_event *re = info;
+
+	perf_remove_event(re->event, re->detach_group);
 	return 0;
 }
 
 #ifdef CONFIG_SMP
-static void perf_retry_remove(struct perf_event *event)
+static void perf_retry_remove(struct remove_event *re)
 {
+	struct perf_event *event = re->event;
 	int up_ret;
 	/*
 	 * CPU was offline. Bring it online so we can
@@ -1241,21 +1254,16 @@ static void perf_retry_remove(struct perf_event *event)
 	if (!up_ret)
 		/* Try the remove call once again. */
 		cpu_function_call(event->cpu, __perf_remove_from_context,
-				  event);
+				  re);
 	else
 		pr_err("Failed to bring up CPU: %d, ret: %d\n",
 		       event->cpu, up_ret);
 }
 #else
-static void perf_retry_remove(struct perf_event *event)
+static void perf_retry_remove(struct remove_event *re)
 {
 }
 #endif
-
-struct remove_event {
-	struct perf_event *event;
-	bool detach_group;
-};
 
 /*
  * Remove the event from a task's (or a CPU's) list of events.
@@ -1288,7 +1296,7 @@ static void __ref perf_remove_from_context(struct perf_event *event, bool detach
 		 */
 		ret = cpu_function_call(event->cpu, __perf_remove_from_context, &re);
 		if (ret == -ENXIO)
-			perf_retry_remove(event);
+			perf_retry_remove(&re);
 		return;
 	}
 
@@ -7537,9 +7545,9 @@ static void __perf_event_exit_context(void *__info)
 	perf_pmu_rotate_stop(ctx->pmu);
 
 	list_for_each_entry_safe(event, tmp, &ctx->pinned_groups, group_entry)
-		__perf_remove_from_context(event);
+		perf_remove_event(event, false);
 	list_for_each_entry_safe(event, tmp, &ctx->flexible_groups, group_entry)
-		__perf_remove_from_context(event);
+		perf_remove_event(event, false);
 }
 
 static void perf_event_exit_cpu_context(int cpu)
