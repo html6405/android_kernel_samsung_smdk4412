@@ -109,6 +109,36 @@ static int stop_usbhostd_thread(void)
 	return 0;
 }
 
+int start_usbhostd_wakelock(void)
+{
+	pr_info("host_notifier: start usbhostd wakelock\n");
+	__pm_stay_awake(&ninfo.wlock);
+
+	return 0;
+}
+
+int stop_usbhostd_wakelock(void)
+{
+	pr_info("host_notifier: stop usbhostd wakelock\n");
+	__pm_relax(&ninfo.wlock);
+
+	return 0;
+}
+
+#if defined(CONFIG_MACH_P4NOTE) || defined(CONFIG_MACH_SP7160LTE) || defined(CONFIG_MACH_KONA)
+void host_notifier_enable_irq(void)
+{
+	pr_info("host_notifier: %s\n", __func__);
+	enable_irq(ninfo.currentlimit_irq);
+}
+
+void host_notifier_disable_irq(void)
+{
+	pr_info("host_notifier: %s\n", __func__);
+	disable_irq(ninfo.currentlimit_irq);
+}
+#endif
+
 static int start_usbhostd_notify(void)
 {
 	pr_info("host_notifier: start usbhostd notify\n");

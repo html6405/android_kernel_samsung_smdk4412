@@ -688,7 +688,7 @@ static struct usb_driver rmnet_usb = {
 	.supports_autosuspend = true,
 };
 
-static int __init rmnet_usb_init(void)
+static int rmnet_usb_init(void)
 {
 	int	retval;
 
@@ -707,14 +707,14 @@ static int __init rmnet_usb_init(void)
 
 	return 0;
 }
-module_init(rmnet_usb_init);
+//module_init(rmnet_usb_init);
 
-static void __exit rmnet_usb_exit(void)
+static void rmnet_usb_exit(void)
 {
 	rmnet_usb_ctrl_exit();
 	usb_deregister(&rmnet_usb);
 }
-module_exit(rmnet_usb_exit);
+//module_exit(rmnet_usb_exit);
 
 MODULE_DESCRIPTION("msm rmnet usb device");
 MODULE_LICENSE("GPL v2");
