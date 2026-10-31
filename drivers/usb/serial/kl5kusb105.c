@@ -49,7 +49,7 @@
 #include <linux/usb/serial.h>
 #include "kl5kusb105.h"
 
-static bool debug;
+static int debug;
 
 /*
  * Version Information

@@ -981,6 +981,52 @@ if MACH_U1 || MACH_C1 || MACH_M3 || MACH_M0 || MACH_P4 || MACH_P2 || MACH_P4NOTE
 source "arch/arm/mach-exynos/Kconfig.local"
 endif
 
+config MACH_WILLOW
+	bool "Willow board"
+	select CPU_EXYNOS4212
+	select CPU_EXYNOS4412
+	select S3C_DEV_WDT
+	select S3C_DEV_RTC
+	select S3C_DEV_HSMMC2
+	select S3C_DEV_HSMMC3
+	select S3C_DEV_I2C1
+	select S3C_DEV_I2C2
+	select S3C_DEV_I2C3
+	select S3C_DEV_I2C4
+	select S3C_DEV_I2C5
+	select S3C_DEV_I2C6
+	select S5P_DEV_I2C_HDMIPHY
+	select S5P_GPIO_INT
+	select S5P_DEV_MFC
+	select S5P_DEV_FIMG2D
+	select S5P_DEV_FIMD0
+	select S5P_DEV_FIMD_S5P
+	select S5P_DEV_USB_EHCI
+	select S5P_DEV_USBGADGET
+	select S5P_DEV_USB_SWITCH
+	select S5P_SYSTEM_MMU
+	select EXYNOS_DEV_PD
+	select EXYNOS4_SETUP_SDHCI
+	select EXYNOS4_SETUP_MSHCI
+	select EXYNOS4_SETUP_FB_S5P
+	select EXYNOS4_SETUP_FIMD0
+	select EXYNOS4_SETUP_I2C1
+	select EXYNOS4_SETUP_I2C2
+	select EXYNOS4_SETUP_I2C3
+	select EXYNOS4_SETUP_I2C4
+	select EXYNOS4_SETUP_I2C5
+	select EXYNOS4_SETUP_I2C6
+	select EXYNOS4_SETUP_USB_PHY
+	select EXYNOS4_SETUP_KEYPAD
+	select EXYNOS4_SETUP_MFC
+	select EXYNOS4_DEV_FIMC_LITE
+	select SAMSUNG_DEV_ADC
+	select SAMSUNG_DEV_BACKLIGHT
+	select SAMSUNG_DEV_PWM
+	select SAMSUNG_DEV_KEYPAD
+	help
+	  Machine support for Thinkware Willow
+
 config MACH_SMDK4X12
 	bool "SMDK4X12 board"
 	select CPU_EXYNOS4212

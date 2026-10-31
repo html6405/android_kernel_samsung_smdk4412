@@ -65,7 +65,7 @@ static umode_t devmode = USBFS_DEFAULT_DEVMODE;
 static umode_t busmode = USBFS_DEFAULT_BUSMODE;
 static umode_t listmode = USBFS_DEFAULT_LISTMODE;
 
-static int usbfs_show_options(struct seq_file *seq, struct vfsmount *mnt)
+static int usbfs_show_options(struct seq_file *seq, struct dentry *root)
 {
 	if (devuid != 0)
 		seq_printf(seq, ",devuid=%u", devuid);
@@ -456,7 +456,6 @@ static const struct super_operations usbfs_ops = {
 static int usbfs_fill_super(struct super_block *sb, void *data, int silent)
 {
 	struct inode *inode;
-	struct dentry *root;
 
 	sb->s_blocksize = PAGE_CACHE_SIZE;
 	sb->s_blocksize_bits = PAGE_CACHE_SHIFT;
@@ -464,19 +463,11 @@ static int usbfs_fill_super(struct super_block *sb, void *data, int silent)
 	sb->s_op = &usbfs_ops;
 	sb->s_time_gran = 1;
 	inode = usbfs_get_inode(sb, S_IFDIR | 0755, 0);
-
-	if (!inode) {
-		dbg("%s: could not get inode!",__func__);
-		return -ENOMEM;
-	}
-
-	root = d_alloc_root(inode);
-	if (!root) {
+	sb->s_root = d_make_root(inode);
+	if (!sb->s_root) {
 		dbg("%s: could not get root dentry!",__func__);
-		iput(inode);
 		return -ENOMEM;
 	}
-	sb->s_root = root;
 	return 0;
 }
 
@@ -501,7 +492,7 @@ static int fs_create_by_name (const char *name, mode_t mode,
 	 */
 	if (!parent ) {
 		if (usbfs_mount && usbfs_mount->mnt_sb) {
-			parent = usbfs_mount->mnt_sb->s_root;
+			parent = usbfs_mount->mnt_root;
 		}
 	}
 
@@ -608,7 +599,7 @@ static int create_special_files (void)
 
 	ignore_mount = 0;
 
-	parent = usbfs_mount->mnt_sb->s_root;
+	parent = usbfs_mount->mnt_root;
 	devices_usbfs_dentry = fs_create_file ("devices",
 					       listmode | S_IFREG, parent,
 					       NULL, &usbfs_devices_fops,
@@ -662,7 +653,7 @@ static void usbfs_add_bus(struct usb_bus *bus)
 
 	sprintf (name, "%03d", bus->busnum);
 
-	parent = usbfs_mount->mnt_sb->s_root;
+	parent = usbfs_mount->mnt_root;
 	bus->usbfs_dentry = fs_create_file (name, busmode | S_IFDIR, parent,
 					    bus, NULL, busuid, busgid);
 	if (bus->usbfs_dentry == NULL) {

@@ -185,6 +185,12 @@ config FB_S5P_AMS369FG06
 	help
 	  This enables support for Samsung AMS369FG06 3.7" WVGA AMOLED panel
 
+config FB_S5P_LTN101AL03
+	bool "LTN101AL03"
+	depends on MACH_WILLOW
+	help
+	  This enables support for 10.1" 1280*800 Samsung LCD panel (General Mobile E-Tab 4)
+
 config FB_S5P_S6C1372
 	bool "S6C1372"
 	depends on MACH_MIDAS

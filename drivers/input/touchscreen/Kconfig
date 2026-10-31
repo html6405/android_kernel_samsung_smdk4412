@@ -1035,4 +1035,6 @@ config TOUCHSCREEN_ATMEL_MXT540S
 
 source "drivers/input/touchscreen/wacom/Kconfig"
 
+source "drivers/input/touchscreen/willow/Kconfig"
+
 endif

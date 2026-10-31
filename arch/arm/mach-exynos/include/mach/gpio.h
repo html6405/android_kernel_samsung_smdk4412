@@ -39,5 +39,8 @@ extern void (*exynos5_sleep_gpio_table_set)(void);
 #define GPIO_OUTPUT		1
 
 #include <asm-generic/gpio.h>
+#ifdef CONFIG_MACH_WILLOW
+#include "gpio-willow.h"
+#endif
 
 #endif /* __ASM_ARCH_GPIO_H */

@@ -20,7 +20,7 @@
 #include <linux/usb.h>
 #include <linux/usb/serial.h>
 
-static bool debug;
+static int debug;
 
 struct usbcons_info {
 	int			magic;
