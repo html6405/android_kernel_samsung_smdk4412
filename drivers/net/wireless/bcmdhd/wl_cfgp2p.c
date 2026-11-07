@@ -2636,7 +2636,7 @@ wl_cfgp2p_add_p2p_disc_if(struct bcm_cfg80211 *cfg)
 		CFGP2P_ERR(("p2p_wdev deleted.\n"));
 #else
 		return ERR_PTR(-ENFILE);
-#endif 
+#endif
 	}
 
 	wdev = kzalloc(sizeof(*wdev), GFP_KERNEL);

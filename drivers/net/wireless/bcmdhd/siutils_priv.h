@@ -31,7 +31,7 @@
 #define	SI_ERROR(args)	printf args
 #else
 #define	SI_ERROR(args)
-#endif	
+#endif
 
 #define	SI_MSG(args)
 
