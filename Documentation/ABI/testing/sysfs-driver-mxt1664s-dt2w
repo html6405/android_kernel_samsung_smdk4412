@@ -1,0 +1,22 @@
+What:           /sys/class/sec/tsp/dt2w_timeout
+Date:           November 2026
+Contact:        HTML6405
+Description:
+                Maximum double-tap-to-wake window in seconds after display
+                powerdown. Accepts decimal values from 0 through 86400.
+                The default is 300 (five minutes); 0 means unlimited. Changes apply
+                on the next display powerdown and do not restart an active
+                window. dt2w_enable must also be enabled.
+
+                For example, 300 allows double-tap wake for five minutes.
+                At expiry, the driver restores the saved touch configuration,
+                disables the touch IRQ, powers off the controller and releases
+                its suspend blocker. Full system suspend is then permitted;
+                other wake locks may still prevent it. Use the power button
+                or another supported wake source after expiry. Display resume
+                powers the controller back on; the next display powerdown
+                starts a new window.
+
+                On this board the touch interrupt uses a normal GPIO, so
+                full system suspend is blocked while gesture wake is active.
+                This setting does not make that interrupt wake-capable.
