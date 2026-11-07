@@ -1593,7 +1593,7 @@ wls_parse_batching_cmd(struct net_device *dev, char *command, int total_len)
 							(*token2 == 'A')? "A" : "B"));
 					} else {
 						if ((batch_params.nchan >= WL_NUMCHANNELS) ||
-						    	(i >= WL_NUMCHANNELS)) {
+							(i >= WL_NUMCHANNELS)) {
 							DHD_ERROR(("Too many nchan %d\n",
 								batch_params.nchan));
 							err = BCME_BUFTOOSHORT;
