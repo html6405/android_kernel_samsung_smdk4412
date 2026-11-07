@@ -316,6 +316,9 @@ struct mxt_data {
 	bool mxt_enabled;
 	bool debug_log;
 	bool dt2w_enabled;
+	bool screen_off;
+	unsigned int dt2w_timeout; /* Seconds; 0 keeps DT2W unlimited. */
+	struct delayed_work dt2w_timeout_work;
 	bool gesture_mode;
 	bool irq_wake_enabled;
 	bool dt2w_regs_valid;

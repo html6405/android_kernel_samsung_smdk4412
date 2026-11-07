@@ -1044,6 +1044,38 @@ static ssize_t dt2w_enable_store(struct device *dev,
 	return count;
 }
 
+/* Applies to the next display suspend; the running window is unchanged. */
+static ssize_t dt2w_timeout_show(struct device *dev,
+		struct device_attribute *attr, char *buf)
+{
+	struct mxt_data *data = dev_get_drvdata(dev);
+
+	return snprintf(buf, PAGE_SIZE, "%u\n", data->dt2w_timeout);
+}
+
+static ssize_t dt2w_timeout_store(struct device *dev,
+		struct device_attribute *attr, const char *buf, size_t count)
+{
+	struct mxt_data *data = dev_get_drvdata(dev);
+	unsigned int seconds;
+	int ret;
+
+	ret = kstrtouint(buf, 10, &seconds);
+	if (ret)
+		return ret;
+	/* Bound the millisecond conversion and keep the window practical. */
+	if (seconds > 86400)
+		return -EINVAL;
+
+	mutex_lock(&data->lock);
+	data->dt2w_timeout = seconds;
+	mutex_unlock(&data->lock);
+	return count;
+}
+
+static DEVICE_ATTR(dt2w_timeout, S_IRUGO | S_IWUSR | S_IWGRP,
+	dt2w_timeout_show, dt2w_timeout_store);
+
 static DEVICE_ATTR(cmd, S_IWUSR | S_IWGRP, NULL, store_cmd);
 static DEVICE_ATTR(cmd_status, S_IRUGO, show_cmd_status, NULL);
 static DEVICE_ATTR(cmd_result, S_IRUGO, show_cmd_result, NULL);
@@ -1057,6 +1089,7 @@ static struct attribute *touchscreen_attributes[] = {
 	&dev_attr_cmd_result.attr,
 	&dev_attr_cmd_list.attr,
 	&dev_attr_dt2w_enable.attr,
+	&dev_attr_dt2w_timeout.attr,
 	NULL,
 };
 

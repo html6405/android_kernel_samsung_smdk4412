@@ -482,6 +482,9 @@ static void set_charger_config(struct mxt_data *data,
 	u8 *buf = data->charger_inform_buf;
 	int i = 1;
 
+	if (data->screen_off || data->gesture_mode || !data->mxt_enabled)
+		return;
+
 	while (data->charger_inform_buf_size > i + 3) {
 		u8 *tmp = &buf[i];
 		int ret = 0;
@@ -515,8 +518,11 @@ static void inform_charger(struct mxt_callbacks *cb,
 
 	cancel_delayed_work_sync(&data->noti_dwork);
 	cancel_delayed_work_sync(&data->acq_int_dwork);
+	mutex_lock(&data->lock);
 	data->charging_mode = en;
-	schedule_delayed_work(&data->noti_dwork, HZ / 5);
+	if (!data->screen_off)
+		schedule_delayed_work(&data->noti_dwork, HZ / 5);
+	mutex_unlock(&data->lock);
 }
 
 static void charger_noti_dwork(struct work_struct *work)
@@ -525,10 +531,9 @@ static void charger_noti_dwork(struct work_struct *work)
 		container_of(work, struct mxt_data,
 		noti_dwork.work);
 
-	if (!data->mxt_enabled) {
-		schedule_delayed_work(&data->noti_dwork, HZ / 5);
-		return ;
-	}
+	mutex_lock(&data->lock);
+	if (data->screen_off || !data->mxt_enabled)
+		goto out;
 
 	dev_info(&data->client->dev,
 		"%s mode\n",
@@ -538,6 +543,8 @@ static void charger_noti_dwork(struct work_struct *work)
 
 	if (!data->charging_mode)
 		schedule_delayed_work(&data->acq_int_dwork, HZ * 3);
+out:
+	mutex_unlock(&data->lock);
 }
 
 static void switch_acq_int_dwork(struct work_struct *work)
@@ -546,7 +553,9 @@ static void switch_acq_int_dwork(struct work_struct *work)
 		container_of(work, struct mxt_data,
 		acq_int_dwork.work);
 
+	mutex_lock(&data->lock);
 	set_charger_config(data, 1);
+	mutex_unlock(&data->lock);
 }
 
 static void inform_charger_init(struct mxt_data *data, u8 *buf)
@@ -763,7 +772,7 @@ static void mxt_treat_T6_object(struct mxt_data *data, u8 *msg)
 			SPT_CTECONFIG_T46, 3, 24);
 	}
 	/* reset */
-	if (msg[1] & 0x80) {
+	if ((msg[1] & 0x80) && !data->screen_off) {
 		dev_info(&data->client->dev, "reset is ongoing\n");
 
 		if (data->charging_mode)
@@ -1134,6 +1143,9 @@ static int mxt_enter_gesture_mode(struct mxt_data *data)
 	pm_stay_awake(&data->client->dev);
 	data->irq_wake_enabled = false;
 	data->gesture_mode = true;
+	if (data->dt2w_timeout)
+		schedule_delayed_work(&data->dt2w_timeout_work,
+			msecs_to_jiffies(data->dt2w_timeout * 1000));
 	dev_info(&data->client->dev,
 		"DT2W: gesture suspend enabled (T7=%u/%u/%u)\n",
 		t7_cfg[0], t7_cfg[1], t7_cfg[2]);
@@ -1156,7 +1168,8 @@ restore:
 	return ret;
 }
 
-static int mxt_exit_gesture_mode(struct mxt_data *data)
+/* power_off leaves the IRQ disabled and the wake lock held for shutdown. */
+static int mxt_exit_gesture_mode(struct mxt_data *data, bool power_off)
 {
 	struct mxt_object *t24;
 	int ret = 0;
@@ -1165,7 +1178,7 @@ static int mxt_exit_gesture_mode(struct mxt_data *data)
 	if (!data->gesture_mode)
 		return 0;
 
-	pm_relax(&data->client->dev);
+	cancel_delayed_work(&data->dt2w_timeout_work);
 	data->irq_wake_enabled = false;
 
 	/* Serialize register restoration against the threaded IRQ handler. */
@@ -1210,14 +1223,19 @@ static int mxt_exit_gesture_mode(struct mxt_data *data)
 	data->dt2w_t57_valid = false;
 	data->dt2w_regs_valid = false;
 	data->gesture_mode = false;
-	enable_irq(data->client->irq);
+	if (!power_off)
+		enable_irq(data->client->irq);
 
 #if TSP_INFORM_CHARGER
-	set_charger_config(data, 0);
-	if (!data->charging_mode)
-		schedule_delayed_work(&data->acq_int_dwork, HZ * 3);
+	if (!data->screen_off) {
+		set_charger_config(data, 0);
+		if (!data->charging_mode)
+			schedule_delayed_work(&data->acq_int_dwork, HZ * 3);
+	}
 #endif
 
+	if (!power_off)
+		pm_relax(&data->client->dev);
 	dev_info(&data->client->dev, "DT2W: normal touch mode restored\n");
 	return ret;
 }
@@ -1294,6 +1312,25 @@ static int mxt_internal_suspend(struct mxt_data *data)
 	mxt_release_all_fingers(data);
 	data->pdata->power_off();
 	return 0;
+}
+
+/* The normal GPIO IRQ cannot wake the SoC from full suspend. */
+static void mxt_dt2w_timeout_work(struct work_struct *work)
+{
+	struct mxt_data *data = container_of(work, struct mxt_data,
+					   dt2w_timeout_work.work);
+
+	mutex_lock(&data->lock);
+	if (data->screen_off && data->gesture_mode) {
+		if (mxt_exit_gesture_mode(data, true))
+			dev_warn(&data->client->dev,
+				"DT2W: register restore failed before power off\n");
+		data->mxt_enabled = false;
+		mxt_internal_suspend(data);
+		pm_relax(&data->client->dev);
+		dev_info(&data->client->dev, "DT2W: timeout, touch powered off\n");
+	}
+	mutex_unlock(&data->lock);
 }
 
 static int mxt_internal_resume(struct mxt_data *data)
@@ -1518,7 +1555,7 @@ static int mxt_input_open(struct input_dev *dev)
 	struct mxt_data *data = input_get_drvdata(dev);
 
 	mutex_lock(&data->lock);
-	if (!data->gesture_mode)
+	if (!data->screen_off && data->mxt_enabled)
 		mxt_start(data);
 	mutex_unlock(&data->lock);
 
@@ -1530,7 +1567,7 @@ static void mxt_input_close(struct input_dev *dev)
 	struct mxt_data *data = input_get_drvdata(dev);
 
 	mutex_lock(&data->lock);
-	if (!data->gesture_mode)
+	if (!data->screen_off && data->mxt_enabled)
 		mxt_stop(data);
 	mutex_unlock(&data->lock);
 }
@@ -1541,12 +1578,14 @@ static void late_resume_dwork(struct work_struct *work)
 		container_of(work, struct mxt_data,
 		resume_dwork.work);
 
+	mutex_lock(&data->lock);
 	set_charger_config(data, 0);
 
-	if (!data->charging_mode)
+	if (!data->screen_off && !data->charging_mode)
 		schedule_delayed_work(&data->acq_int_dwork, HZ * 3);
 
 	enable_irq(data->client->irq);
+	mutex_unlock(&data->lock);
 }
 
 #ifdef CONFIG_FB
@@ -1558,11 +1597,14 @@ static void mxt_fb_suspend(struct mxt_data *data)
 	int ret;
 	if (data->fb_suspended)
         		return;
-#if TSP_INFORM_CHARGER
-	cancel_delayed_work_sync(&data->noti_dwork);
-#endif
+	flush_delayed_work(&data->resume_dwork);
 
 	mutex_lock(&data->lock);
+	data->screen_off = true;
+#if TSP_INFORM_CHARGER
+	cancel_delayed_work(&data->noti_dwork);
+	cancel_delayed_work(&data->acq_int_dwork);
+#endif
 
 	if (data->mxt_enabled) {
 		if (data->dt2w_enabled) {
@@ -1594,10 +1636,13 @@ static void mxt_fb_resume(struct mxt_data *data)
 	if (!data->fb_suspended)
             		return;
 
+	/* Drain the old window before another display-off cycle can start. */
+	cancel_delayed_work_sync(&data->dt2w_timeout_work);
 	mutex_lock(&data->lock);
 
+	data->screen_off = false;
 	if (data->gesture_mode) {
-		if (mxt_exit_gesture_mode(data))
+		if (mxt_exit_gesture_mode(data, false))
 			dev_err(&data->client->dev,
 				"DT2W: failed to fully restore normal registers\n");
 	} else if (data->mxt_enabled) {
@@ -1647,6 +1692,11 @@ static int mxt_suspend(struct device *dev)
 
 	mutex_lock(&data->lock);
 
+	data->screen_off = true;
+#if TSP_INFORM_CHARGER
+	cancel_delayed_work(&data->noti_dwork);
+	cancel_delayed_work(&data->acq_int_dwork);
+#endif
 	if (data->dt2w_enabled) {
 		if (mxt_enter_gesture_mode(data)) {
 			disable_irq(data->client->irq);
@@ -1668,10 +1718,12 @@ static int mxt_resume(struct device *dev)
 	struct i2c_client *client = to_i2c_client(dev);
 	struct mxt_data *data = i2c_get_clientdata(client);
 
+	cancel_delayed_work_sync(&data->dt2w_timeout_work);
 	mutex_lock(&data->lock);
 
+	data->screen_off = false;
 	if (data->gesture_mode) {
-		mxt_exit_gesture_mode(data);
+		mxt_exit_gesture_mode(data, false);
 	} else {
 		mxt_internal_resume(data);
 		data->mxt_enabled = true;
@@ -1911,6 +1963,7 @@ static int __devinit mxt_probe(struct i2c_client *client,
 	data->pdata = pdata;
 	data->num_fingers = pdata->max_finger_touches;
 	data->mxt_enabled = true;
+	data->dt2w_timeout = 300;
 	data->config_version = pdata->config_version;
 	mutex_init(&data->lock);
 
@@ -1967,6 +2020,7 @@ static int __devinit mxt_probe(struct i2c_client *client,
 		goto err_reg_dev;
 
 	INIT_DELAYED_WORK(&data->resume_dwork, late_resume_dwork);
+	INIT_DELAYED_WORK(&data->dt2w_timeout_work, mxt_dt2w_timeout_work);
 
 	data->pdata->power_on();
 	msleep(MXT_1664S_HW_RESET_TIME);
@@ -2056,12 +2110,20 @@ static int __devexit mxt_remove(struct i2c_client *client)
 {
 	struct mxt_data *data = i2c_get_clientdata(client);
 
-	pm_relax(&client->dev);
-	device_init_wakeup(&client->dev, false);
-
 #ifdef CONFIG_FB
 	fb_unregister_client(&data->fb_notif);
 #endif
+	mutex_lock(&data->lock);
+	data->screen_off = true;
+	mutex_unlock(&data->lock);
+	cancel_delayed_work_sync(&data->dt2w_timeout_work);
+	cancel_delayed_work_sync(&data->resume_dwork);
+#if TSP_INFORM_CHARGER
+	cancel_delayed_work_sync(&data->noti_dwork);
+	cancel_delayed_work_sync(&data->acq_int_dwork);
+#endif
+	pm_relax(&client->dev);
+	device_init_wakeup(&client->dev, false);
 	free_irq(client->irq, data);
 #if TSP_INFORM_CHARGER
 	kfree(data->charger_inform_buf);
