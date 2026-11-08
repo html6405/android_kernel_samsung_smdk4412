@@ -23,6 +23,7 @@
 #include <linux/slab.h>
 #include <linux/gpio.h>
 #include <linux/pm_wakeup.h>
+#include <linux/power_supply.h>
 #include <linux/i2c/mxt1664s.h>
 #include <asm/unaligned.h>
 #include <linux/firmware.h>
@@ -510,6 +511,8 @@ static void set_charger_config(struct mxt_data *data,
 
 }
 
+static void mxt_gesture_power_changed(struct mxt_data *data);
+
 static void inform_charger(struct mxt_callbacks *cb,
 	bool en)
 {
@@ -519,7 +522,10 @@ static void inform_charger(struct mxt_callbacks *cb,
 	cancel_delayed_work_sync(&data->noti_dwork);
 	cancel_delayed_work_sync(&data->acq_int_dwork);
 	mutex_lock(&data->lock);
-	data->charging_mode = en;
+	if (data->charging_mode != en) {
+		data->charging_mode = en;
+		mxt_gesture_power_changed(data);
+	}
 	if (!data->screen_off)
 		schedule_delayed_work(&data->noti_dwork, HZ / 5);
 	mutex_unlock(&data->lock);
@@ -1024,6 +1030,22 @@ static void mxt_treat_T24_object(struct mxt_data *data, u8 *msg)
 	input_sync(data->input_dev);
 }
 
+/* Called with data->lock held; an old running timeout checks the deadline. */
+static void mxt_update_dt2w_timeout(struct mxt_data *data)
+{
+	unsigned long delay;
+
+	cancel_delayed_work(&data->dt2w_timeout_work);
+	data->dt2w_timeout_armed = false;
+	if (!data->gesture_mode || data->charging_mode || !data->dt2w_timeout)
+		return;
+
+	delay = msecs_to_jiffies(data->dt2w_timeout * 1000);
+	data->dt2w_deadline = jiffies + delay;
+	data->dt2w_timeout_armed = true;
+	schedule_delayed_work(&data->dt2w_timeout_work, delay);
+}
+
 static int mxt_enter_gesture_mode(struct mxt_data *data)
 {
 	struct mxt_object *t24;
@@ -1143,9 +1165,7 @@ static int mxt_enter_gesture_mode(struct mxt_data *data)
 	pm_stay_awake(&data->client->dev);
 	data->irq_wake_enabled = false;
 	data->gesture_mode = true;
-	if (data->dt2w_timeout)
-		schedule_delayed_work(&data->dt2w_timeout_work,
-			msecs_to_jiffies(data->dt2w_timeout * 1000));
+	mxt_update_dt2w_timeout(data);
 	dev_info(&data->client->dev,
 		"DT2W: gesture suspend enabled (T7=%u/%u/%u)\n",
 		t7_cfg[0], t7_cfg[1], t7_cfg[2]);
@@ -1179,6 +1199,7 @@ static int mxt_exit_gesture_mode(struct mxt_data *data, bool power_off)
 		return 0;
 
 	cancel_delayed_work(&data->dt2w_timeout_work);
+	data->dt2w_timeout_armed = false;
 	data->irq_wake_enabled = false;
 
 	/* Serialize register restoration against the threaded IRQ handler. */
@@ -1319,9 +1340,18 @@ static void mxt_dt2w_timeout_work(struct work_struct *work)
 {
 	struct mxt_data *data = container_of(work, struct mxt_data,
 					   dt2w_timeout_work.work);
+	unsigned long now;
 
 	mutex_lock(&data->lock);
-	if (data->screen_off && data->gesture_mode) {
+	now = jiffies;
+	if (data->screen_off && data->gesture_mode &&
+	    !data->charging_mode && data->dt2w_timeout_armed) {
+		/* A detach may have restarted the window while we waited for lock. */
+		if (time_before(now, data->dt2w_deadline)) {
+			schedule_delayed_work(&data->dt2w_timeout_work,
+				data->dt2w_deadline - now);
+			goto out;
+		}
 		if (mxt_exit_gesture_mode(data, true))
 			dev_warn(&data->client->dev,
 				"DT2W: register restore failed before power off\n");
@@ -1330,13 +1360,55 @@ static void mxt_dt2w_timeout_work(struct work_struct *work)
 		pm_relax(&data->client->dev);
 		dev_info(&data->client->dev, "DT2W: timeout, touch powered off\n");
 	}
+out:
 	mutex_unlock(&data->lock);
 }
 
 static int mxt_internal_resume(struct mxt_data *data)
 {
-	data->pdata->power_on();
-	return 0;
+	return data->pdata->power_on();
+}
+
+/* The board callback reports cable presence, including a full battery. */
+static void mxt_gesture_power_changed(struct mxt_data *data)
+{
+	int ret;
+
+	if (!data->screen_off)
+		return;
+
+	if (data->gesture_mode) {
+		mxt_update_dt2w_timeout(data);
+		dev_info(&data->client->dev, "DT2W: external power %s\n",
+			data->charging_mode ? "connected, timeout paused" :
+			"disconnected, timeout restarted");
+		return;
+	}
+
+	if (!data->charging_mode || !data->dt2w_enabled || data->mxt_enabled)
+		return;
+
+	/* A timeout left the controller off and its IRQ disabled. */
+	pm_stay_awake(&data->client->dev);
+	ret = mxt_internal_resume(data);
+	if (ret)
+		goto relax;
+	msleep(MXT_1664S_HW_RESET_TIME);
+	data->mxt_enabled = true;
+	ret = mxt_enter_gesture_mode(data);
+	if (ret) {
+		data->mxt_enabled = false;
+		mxt_internal_suspend(data);
+		goto relax;
+	}
+	enable_irq(data->client->irq);
+	dev_info(&data->client->dev, "DT2W: reactivated on external power\n");
+	return;
+
+relax:
+	pm_relax(&data->client->dev);
+	dev_err(&data->client->dev,
+		"DT2W: external power reactivation failed (%d)\n", ret);
 }
 
 static int mxt_get_bootloader_version(struct i2c_client *client, u8 val)
@@ -2045,6 +2117,8 @@ static int __devinit mxt_probe(struct i2c_client *client,
 	 */
 
 #if TSP_INFORM_CHARGER
+	/* Seed cable state if power was connected before callback registration. */
+	data->charging_mode = power_supply_is_system_supplied() > 0;
 	/* Register callbacks */
 	/* To inform tsp , charger connection status*/
 	data->callbacks.inform_charger = inform_charger;
