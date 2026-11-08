@@ -1771,7 +1771,7 @@ config MACH_KONA_SENSOR
 
 config CHARGE_LEVEL
 	bool "Charge level interface"
-	depends on BATTERY_SAMSUNG
+	depends on BATTERY_SAMSUNG || (MACH_P4NOTE && SMB347_CHARGER)
 	default n
 	help
 	  Allows configuration of ac and usb charging levels
