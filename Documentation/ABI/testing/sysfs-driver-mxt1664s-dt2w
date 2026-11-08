@@ -2,13 +2,22 @@ What:           /sys/class/sec/tsp/dt2w_timeout
 Date:           November 2026
 Contact:        HTML6405
 Description:
-                Maximum double-tap-to-wake window in seconds after display
-                powerdown. Accepts decimal values from 0 through 86400.
-                The default is 300 (five minutes); 0 means unlimited. Changes apply
-                on the next display powerdown and do not restart an active
-                window. dt2w_enable must also be enabled.
+                Maximum double-tap-to-wake window in seconds on battery
+                after display powerdown or external power disconnect. Accepts
+                decimal values from 0 through 86400.
+                The default is 300 (five minutes); 0 means unlimited. Changes
+                apply on the next display powerdown or external power
+                disconnect and do not restart an active window. dt2w_enable
+                must also be enabled.
 
-                For example, 300 allows double-tap wake for five minutes.
+                External USB, AC or dock power pauses the timeout, including
+                when the battery is full. Disconnecting external power starts
+                a fresh window. Connecting it after timeout powers the touch
+                controller back on and reactivates DT2W while dt2w_enable is
+                enabled, without requiring display resume.
+
+                For example, 300 allows double-tap wake for five minutes on
+                battery, and indefinitely while externally powered.
                 At expiry, the driver restores the saved touch configuration,
                 disables the touch IRQ, powers off the controller and releases
                 its suspend blocker. Full system suspend is then permitted;

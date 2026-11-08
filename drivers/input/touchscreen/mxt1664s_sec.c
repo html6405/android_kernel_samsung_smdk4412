@@ -1044,7 +1044,7 @@ static ssize_t dt2w_enable_store(struct device *dev,
 	return count;
 }
 
-/* Applies to the next display suspend; the running window is unchanged. */
+/* Applies to the next display suspend or detach, not the running window. */
 static ssize_t dt2w_timeout_show(struct device *dev,
 		struct device_attribute *attr, char *buf)
 {
