@@ -12,9 +12,25 @@ extern bool is_cable_attached;
 #ifdef CONFIG_MACH_U1_NA_SPR
 static void cdma_wimax_chk_modem_pwroff(void);
 #endif
+
+static bool sec_power_off_cable_attached(void)
+{
+#ifdef CONFIG_MACH_P4NOTE
+	/*
+	 * Charger work and interrupts have stopped by now, so the cached
+	 * cable state may predate an unplug during shutdown. On P4NOTE the
+	 * TA_nCONNECTED input is active high (see check_ta_conn()).
+	 */
+	return !!gpio_get_value(GPIO_TA_nCONNECTED);
+#else
+	return is_cable_attached;
+#endif
+}
+
 static void sec_power_off(void)
 {
 	int poweroff_try = 0;
+	bool cable_attached;
 
 	local_irq_disable();
 
@@ -24,12 +40,22 @@ static void sec_power_off(void)
 #ifdef CONFIG_MACH_U1_NA_SPR
 		cdma_wimax_chk_modem_pwroff();
 #endif
+		cable_attached = sec_power_off_cable_attached();
+#ifdef CONFIG_MACH_P4NOTE
+		/* Allow an in-progress disconnect to settle before charging reboot. */
+		if (cable_attached) {
+			mdelay(100);
+			cable_attached = sec_power_off_cable_attached();
+		}
+		pr_emerg("%s: live cable state=%d (cached=%d)\n",
+			 __func__, cable_attached, is_cable_attached);
+#endif
 		/* Check reboot charging */
-		if (is_cable_attached || (poweroff_try >= 5)) {
+		if (cable_attached || (poweroff_try >= 5)) {
 			pr_emerg
 			    ("%s: charger connected(%d) or power"
 			     "off failed(%d), reboot!\n",
-			     __func__, is_cable_attached, poweroff_try);
+			     __func__, cable_attached, poweroff_try);
 			writel(0x0, S5P_INFORM2);	/* To enter LP charging */
 
 			flush_cache_all();
