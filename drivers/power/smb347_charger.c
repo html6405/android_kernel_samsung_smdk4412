@@ -30,6 +30,15 @@
 #include <linux/interrupt.h>
 #include <linux/slab.h>
 #include <plat/gpio-cfg.h>
+#ifdef CONFIG_CHARGE_LEVEL
+#include <linux/charge_level.h>
+
+/* Preserve the tablet's existing 2 A input limits at boot. */
+int ac_level = 2000;
+int usb_level = 2000;
+char charge_info_text[30] = "No charger";
+int charge_info_level;
+#endif
 
 /* Slave address */
 #define SMB347_SLAVE_ADDR		0x0C
@@ -286,6 +295,53 @@ static int smb347_get_charger_is_full(void)
 	return status;
 }
 
+#ifdef CONFIG_CHARGE_LEVEL
+/* Round input limits down to a hardware setting, never above the request.
+ * Fast-charge/precharge/termination settings remain under charger control.
+ * Like the original interface, new limits apply when charging is configured.
+ */
+static int smb347_charge_mode = CABLE_TYPE_USB;
+
+static void smb347_apply_charge_level(struct smb347_chg_data *chg, int limit)
+{
+	static const int input_levels[] = {
+		300, 500, 700, 900, 1200, 1500, 1800, 2000
+	};
+	int i;
+	u8 command;
+
+	limit = min(limit, smb347_charge_mode == CABLE_TYPE_USB ?
+		usb_level : ac_level);
+	if (limit < input_levels[0]) {
+		smb347_disable_charging(chg);
+		charge_info_level = 0;
+		return;
+	}
+
+	/* Preserve charging/OTG state when enabling volatile writes. */
+	if (smb347_i2c_read(chg->client, SMB347_COMMAND_A, &command) < 0)
+		goto fail;
+	if (smb347_i2c_write(chg->client, SMB347_COMMAND_A,
+		command | 0x80) < 0)
+		goto fail;
+	for (i = ARRAY_SIZE(input_levels) - 1; i > 0; i--)
+		if (input_levels[i] <= limit)
+			break;
+	/* Set both DCIN and USBIN input limits. */
+	if (smb347_i2c_write(chg->client, SMB347_INPUT_CURRENTLIMIT,
+		(i << 4) | i) < 0)
+		goto fail;
+	if (smb347_i2c_write(chg->client, SMB347_COMMAND_B, 0x03) < 0)
+		goto fail;
+	charge_info_level = input_levels[i];
+	return;
+fail:
+	smb347_disable_charging(chg);
+	charge_info_level = 0;
+	sprintf(charge_info_text, "Charger I/O error");
+}
+#endif
+
 static void smb347_set_charging_state(int enable, int charging_mode)
 {
 	struct smb347_chg_data *chg = smb347_chg;
@@ -307,8 +363,21 @@ static void smb347_set_charging_state(int enable, int charging_mode)
 		smb347_i2c_write(chg->client, SMB347_COMMAND_B, 0x03);
 		pr_info("%s : LOW(USB5) charging enabled 2.0A\n", __func__);
 
+#ifdef CONFIG_CHARGE_LEVEL
+		smb347_charge_mode = charging_mode;
+		sprintf(charge_info_text, "%s", charging_mode == CABLE_TYPE_USB ?
+			"USB Charger" : "AC Charger");
+		smb347_apply_charge_level(chg, 2000);
+		if (charge_info_level > 0)
+			smb347_enable_charging(chg);
+#else
 		smb347_enable_charging(chg);
+#endif
 	} else {
+#ifdef CONFIG_CHARGE_LEVEL
+		charge_info_level = 0;
+		sprintf(charge_info_text, "Charging disabled");
+#endif
 		smb347_disable_charging(chg);
 	}
 
@@ -359,6 +428,10 @@ void smb347_set_charging_current(int set_current)
 {
 	struct smb347_chg_data *chg = smb347_chg;
 
+#ifdef CONFIG_CHARGE_LEVEL
+	/* Keep the existing SIOP reduction to USB500. */
+	smb347_apply_charge_level(chg, set_current > 450 ? 2000 : 500);
+#else
 	if (set_current > 450) {
 		/* CommandB : High-current mode */
 		smb347_i2c_write(chg->client, SMB347_COMMAND_B, 0x03);
@@ -368,6 +441,7 @@ void smb347_set_charging_current(int set_current)
 		smb347_i2c_write(chg->client, SMB347_COMMAND_B, 0x02);
 		udelay(10);
 	}
+#endif
 	pr_debug("%s: Set charging current as %dmA.\n", __func__, set_current);
 }
 

@@ -83,6 +83,7 @@ static ssize_t charge_level_usb_store(struct kobject *kobj, struct kobj_attribut
 	return count;
 }
 
+#ifdef CONFIG_BATTERY_SAMSUNG
 static ssize_t charge_level_wireless_show(struct kobject *kobj, struct kobj_attribute *attr, char *buf)
 {
 	// print current value
@@ -114,7 +115,7 @@ static ssize_t charge_level_wireless_store(struct kobject *kobj, struct kobj_att
 	return count;
 }
 
-#ifdef CONFIG_BATTERY_SAMSUNG
+
 static ssize_t ignore_unstable_power_show(struct kobject *kobj, struct kobj_attribute *attr, char *buf)
 {
 	// print current value
@@ -165,6 +166,7 @@ static ssize_t ignore_safety_margin_store(struct kobject *kobj, struct kobj_attr
 
 	return count;
 }
+
 #endif
 
 static ssize_t charge_info_show(struct kobject *kobj, struct kobj_attribute *attr, char *buf)
@@ -186,15 +188,18 @@ __ATTR(charge_level_ac, 0666, charge_level_ac_show, charge_level_ac_store);
 static struct kobj_attribute charge_level_usb_attribute =
 __ATTR(charge_level_usb, 0666, charge_level_usb_show, charge_level_usb_store);
 
+#ifdef CONFIG_BATTERY_SAMSUNG
 static struct kobj_attribute charge_level_wireless_attribute =
 __ATTR(charge_level_wireless, 0666, charge_level_wireless_show, charge_level_wireless_store);
-#ifdef CONFIG_BATTERY_SAMSUNG
+
 static struct kobj_attribute ignore_unstable_power_attribute =
 __ATTR(ignore_unstable_power, 0666, ignore_unstable_power_show, ignore_unstable_power_store);
 
 static struct kobj_attribute ignore_safety_margin_attribute =
 __ATTR(ignore_safety_margin, 0666, ignore_safety_margin_show, ignore_safety_margin_store);
+
 #endif
+
 static struct kobj_attribute charge_info_attribute =
 __ATTR(charge_info, 0666, charge_info_show, NULL);
 
@@ -202,8 +207,8 @@ static struct attribute *charge_level_attrs[] =
 {
 	&charge_level_ac_attribute.attr,
 	&charge_level_usb_attribute.attr,
-	&charge_level_wireless_attribute.attr,
 #ifdef CONFIG_BATTERY_SAMSUNG
+	&charge_level_wireless_attribute.attr,
 	&ignore_unstable_power_attribute.attr,
 	&ignore_safety_margin_attribute.attr,
 #endif
