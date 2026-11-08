@@ -1015,7 +1015,6 @@ static int dhd_set_suspend(int value, dhd_pub_t *dhd)
 
     if (!dhd->up) {
         DHD_ERROR(("%s: dhd->up is false, skipping suspend!\n", __func__));
-        dhd_suspend_unlock(dhd);
         return -EINVAL;
     }
 
