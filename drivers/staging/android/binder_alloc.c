@@ -26,7 +26,6 @@
 #include <linux/seq_file.h>
 #include <linux/vmalloc.h>
 #include <linux/slab.h>
-#include <linux/mm.h> // for current->mm and struct vm_area_struct
 #include <linux/sched.h>
 #include <linux/err.h>
 #include "binder_alloc.h"
@@ -151,12 +150,10 @@ static struct binder_buffer *binder_alloc_prepare_to_free_locked(
 			 * free the buffer when in use by kernel or
 			 * after it's already been freed.
 			 */
-            if (!buffer->allow_user_free) {
-                pr_warn("%d: double free attempt or not user-free buffer: %pK\n", alloc->pid, buffer);
-                return ERR_PTR(-EPERM);
-            }
-            buffer->allow_user_free = 0;
-            return buffer;
+			if (!buffer->allow_user_free)
+				return ERR_PTR(-EPERM);
+			buffer->allow_user_free = 0;
+			return buffer;
 		}
 	}
 	return NULL;
@@ -223,18 +220,6 @@ static int binder_update_page_range(struct binder_alloc *alloc, int allocate,
 	if (vma == NULL) {
 		pr_err("%d: binder_alloc_buf failed to map pages in userspace, no vma\n",
 			alloc->pid);
-        pr_info("binder_alloc: dumping VMAs for pid %d\n", current->pid);
-        if (current->mm) {
-            struct vm_area_struct *vma_iter;
-            for (vma_iter = current->mm->mmap; vma_iter; vma_iter = vma_iter->vm_next) {
-                pr_info("  VMA: 0x%08lx-0x%08lx flags=0x%lx\n",
-                vma_iter->vm_start,
-                vma_iter->vm_end,
-                vma_iter->vm_flags);
-            }
-        } else {
-            pr_warn("binder_alloc: current->mm is NULL\n");
-        }
 		goto err_no_vma;
 	}
 
@@ -316,13 +301,9 @@ struct binder_buffer *binder_alloc_new_buf_locked(struct binder_alloc *alloc,
 	if (alloc->vma == NULL) {
 		pr_err("%d: binder_alloc_buf, no vma\n",
 		       alloc->pid);
-        pr_err("binder: alloc_buf failed: no vma for pid %d\n", current->pid);
 		return ERR_PTR(-ESRCH);
 	}
-    if (!alloc->buffer) {
-        pr_err("%d: binder_alloc_buf, no buffer base\n", alloc->pid);
-        return ERR_PTR(-ENOMEM);
-    }
+
 	data_offsets_size = ALIGN(data_size, sizeof(void *)) +
 		ALIGN(offsets_size, sizeof(void *));
 
@@ -584,12 +565,6 @@ static void binder_free_buf_locked(struct binder_alloc *alloc,
 		(void *)PAGE_ALIGN((uintptr_t)buffer->data),
 		(void *)(((uintptr_t)buffer->data + buffer_size) & PAGE_MASK),
 		NULL);
-
-    if (buffer->free) {
-        pr_warn("binder: attempt to free already freed buffer %pK\n", buffer);
-        return;
-    }
-    buffer->free = true;
 
 	rb_erase(&buffer->rb_node, &alloc->allocated_buffers);
 	buffer->free = 1;
