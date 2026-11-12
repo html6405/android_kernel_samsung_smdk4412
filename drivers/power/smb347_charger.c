@@ -30,14 +30,6 @@
 #include <linux/interrupt.h>
 #include <linux/slab.h>
 #include <plat/gpio-cfg.h>
-#include "linux/charge_level.h"
-
-int ac_level 		= AC_CHARGE_LEVEL_DEFAULT;    // Set AC default charge level
-int usb_level  		= USB_CHARGE_LEVEL_DEFAULT; // Set USB default charge level
-int wireless_level	= WIRELESS_CHARGE_LEVEL_DEFAULT; // Set wireless default charge level
-char charge_info_text[30];
-int charge_info_level;
-
 
 /* Slave address */
 #define SMB347_SLAVE_ADDR		0x0C
@@ -294,57 +286,6 @@ static int smb347_get_charger_is_full(void)
 	return status;
 }
 
-static u8 smb347_charging_levels(void)
-{
-    switch(charge_info_level)
-    {
-        case 0:
-        case 100:
-        case 200:
-            printk("CHARGE_LEVEL: set minimum charging current to 200 mA\n");
-            return 0x00;
-            break;
-        case 300:
-        case 400:
-        case 500:
-        case 600:
-            printk("CHARGE_LEVEL: set charging current to 600 mA\n");
-            return 0x01;
-            break;
-        case 700:
-        case 800:
-        case 900:
-            printk("CHARGE_LEVEL: set charging current to 900 mA\n");
-            return 0x22;
-            break;
-        case 1000:
-            printk("CHARGE_LEVEL: set maximum charging current to 1000 mA\n");
-            return 0x33;
-            break;
-        case 1100:
-        case 1200:
-        case 1300:
-            printk("CHARGE_LEVEL: set maximum charging current to 1300 mA\n");
-            return 0x44;
-            break;
-        case 1400:
-        case 1500:
-            printk("CHARGE_LEVEL: set maximum charging current to 1600 mA\n");
-            return 0x55;
-            break;
-        case 1600:
-        case 1700:
-        case 1800:
-            printk("CHARGE_LEVEL: set maximum charging current to 1800 mA\n");
-            return 0x66;
-            break;
-        default:
-            printk("CHARGE_LEVEL: set minimum charging current to 200 mA\n");
-            return 0x00;
-            break;
-    }
-}
-
 static void smb347_set_charging_state(int enable, int charging_mode)
 {
 	struct smb347_chg_data *chg = smb347_chg;
@@ -358,57 +299,16 @@ static void smb347_set_charging_state(int enable, int charging_mode)
 
 		/* Init smb347 charger */
 		smb347_charger_init(chg);
+		/* Input current limit : DCIN 1800mA, USBIN HC 1800mA */
+		smb347_i2c_write(chg->client,
+		SMB347_INPUT_CURRENTLIMIT, 0x66);
 
-		switch (charging_mode) {
-		case CABLE_TYPE_TA:
-			/* Input current limit : DCIN 1800mA, USBIN HC 1800mA */
-            charge_info_level = ac_level;
-            sprintf(charge_info_text, "AC Charger");
-            printk("CHARGE_LEVEL: CABLE_TYPE_TA, using charge rate %d mA\n", ac_level);
-			smb347_i2c_write(chg->client,
-				SMB347_INPUT_CURRENTLIMIT, smb347_charging_levels());
-
-			/* CommandB : High-current mode */
-			smb347_i2c_write(chg->client, SMB347_COMMAND_B, 0x03);
-
-			pr_info("%s : 1.8A charging enable\n", __func__);
-			break;
-		case CABLE_TYPE_DESKDOCK:
-			/* Input current limit : DCIN 1500mA, USBIN HC 1500mA */
-            charge_info_level = ac_level;
-            sprintf(charge_info_text, "Deskdock");
-            printk("CHARGE_LEVEL: CABLE_TYPE_DESKDOCK, using charge rate %d mA\n", usb_level);
-			smb347_i2c_write(chg->client,
-				SMB347_INPUT_CURRENTLIMIT, smb347_charging_levels());
-
-			/* CommandB : High-current mode */
-			smb347_i2c_write(chg->client, SMB347_COMMAND_B, 0x03);
-			break;
-		case CABLE_TYPE_USB:
-			/* CommandB : USB5 */
-            charge_info_level = usb_level;
-            sprintf(charge_info_text, "USB Charger");
-            printk("CHARGE_LEVEL: POWER_SUPPLY_TYPE_USB, using charge rate %d mA\n", usb_level);
-            smb347_i2c_write(chg->client,
-                             SMB347_INPUT_CURRENTLIMIT, smb347_charging_levels());
-            smb347_i2c_write(chg->client, SMB347_COMMAND_B, 0x02);
-			break;
-		default:
-			/* CommandB : USB1 */
-            charge_info_level = usb_level;
-            sprintf(charge_info_text, "LOW(USB1) charging");
-            printk("CHARGE_LEVEL: POWER_SUPPLY_TYPE_USB1, using charge rate %d mA\n", usb_level);
-            smb347_i2c_write(chg->client,
-                             SMB347_INPUT_CURRENTLIMIT, smb347_charging_levels());
-            smb347_i2c_write(chg->client, SMB347_COMMAND_B, 0x00);
-			break;
-		}
+		/* CommandB : High-current mode */
+		smb347_i2c_write(chg->client, SMB347_COMMAND_B, 0x03);
+		pr_info("%s : LOW(USB5) charging enabled 1.8A by html6405\n", __func__);
 
 		smb347_enable_charging(chg);
 	} else {
-        charge_info_level = 0;
-        sprintf(charge_info_text, "No charger");
-        printk("CHARGE_LEVEL: charging disabled\n");
 		smb347_disable_charging(chg);
 	}
 
