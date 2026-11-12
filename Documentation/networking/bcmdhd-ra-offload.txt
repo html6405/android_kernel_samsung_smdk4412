@@ -1,0 +1,93 @@
+P4NOTE duplicate empty Router Advertisement offload (opt-in trial)
+================================================================
+
+Some access points deliver IPv6 multicast Router Advertisements (RAs) to
+the station's unicast Ethernet address. The ordinary multicast MAC filter
+does not stop these frames. Frequent repetitions can therefore wake the
+host, taking the modem and battery work through resume as well.
+
+The optional ra_filter parameter is disabled by default. It is compiled
+only for CONFIG_MACH_P4NOTE with packet filtering and wakeup sources.
+This is a limited firmware-offload experiment, not a general RA cache.
+
+Eligibility and operation
+-------------------------
+
+During screen-off, observe three byte-identical, direct 78-byte Ethernet
+RAs: IPv6 payload length 24, hop limit 255, ICMPv6 RA/code 0, router
+lifetime zero, and only a source link-layer address option consistent
+with the sender MAC. Offload an exact match of the whole observed frame,
+including addresses, flags, checksum and option contents. Software RX
+does not drop packets. This classifier is not a replacement for IPv6
+protocol/checksum validation in the network stack.
+
+Other or changed RAs disable the experiment for the screen-off epoch.
+RAs with extension headers and unclassifiable non-first IPv6 fragments
+also disable it. Normal MLD reports are distinguished using the kernel's
+extension-header parser. Advertisements carrying routes, prefixes, DNS,
+MTU or other options cannot become offload candidates.
+
+After a target 120 seconds, restore normal filters for at least 30 seconds
+before filtering again. ALARM_BOOTTIME includes suspend time. A dedicated
+wakeup source protects the firmware transition, not the entire filtered
+interval. Timer targets are not hard real-time guarantees.
+
+Requirements and fallback
+-------------------------
+
+Require primary STA operation, no active AP/P2P GO/GC role, no DHCP or
+suspend-disable request, firmware mode 1, and exactly the expected active
+rules 100 (unicast) and 103 (IPv6 multicast). Temporary IDs 200-202 must be
+unused. Refuse unfamiliar firmware policies.
+
+The temporary discard-on-match rules cover the learned RA, Ethernet
+broadcast and IPv4 multicast. This is not an exact complement of every
+possible MAC group address. If an uncommon group packet passes through,
+restore the old policy and stop the experiment for that epoch.
+
+Serialize firmware table changes with ordinary Android filter updates.
+Restore on display wake, filter-policy changes, suspend-disable and WLAN
+stop/detach. Stop worker/alarm activity during teardown. Firmware errors
+stop the trial; restore normal forwarding before removing trial rules.
+Failed restores are logged and retried at the next normal transition.
+
+Control (root device shell)
+---------------------------
+
+    cat /sys/module/dhd/parameters/ra_filter
+    echo 1 > /sys/module/dhd/parameters/ra_filter
+
+Enable while awake, then turn the display off. The parameter is evaluated
+on subsequent filter/worker transitions, not synchronously by its sysfs
+setter. For immediate return to normal operation, disable it and wake
+the display or restart Wi-Fi:
+
+    echo 0 > /sys/module/dhd/parameters/ra_filter
+
+Runtime enabling is not persistent; the next boot defaults to disabled.
+Logs use the "RA offload:" prefix. wlan_ra_transition should not remain
+active after a transition completes.
+
+Validation
+----------
+
+The host test exercises the actual eligibility/observation helper:
+
+    cc -std=gnu99 -Wall -Wextra -Werror -fsanitize=address,undefined \
+        drivers/net/wireless/bcmdhd/tests/ra_packet_test.c \
+        -o /tmp/ra_packet_test
+    /tmp/ra_packet_test
+
+An optional argument accepts a raw Ethernet-frame fixture. Tests include
+all truncated lengths, positive router lifetime, extra options, changed
+flags, extension headers, neighbor solicitation, source consistency and
+observation invalidation. The host test is not part of the kernel build.
+
+GT-N8000 validation: full kernel build, initial disabled state, firmware
+exact-match acceptance, automatic 120/30-second cycle, wake restoration,
+WLAN shutdown during active filtering, reconnect and IPv4 connectivity.
+An overnight observation covered about 8h34 without USB, with battery
+indication 100 -> 96%, about 93.6% suspend after the initial warmup and
+158 wakeups/hour (previously often 450-560/hour). This was observational,
+not a controlled long A/B comparison with identical background activity.
+Other IPv6 networks remain unvalidated; retain the opt-in default.

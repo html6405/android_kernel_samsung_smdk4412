@@ -63,6 +63,7 @@
 #include <dhd_bus.h>
 #include <dhd_proto.h>
 #include <dhd_dbg.h>
+#include "dhd_ra_filter.h"
 #ifdef DHD_USE_WAKEUP_SOURCES
 #include <linux/device.h>
 #endif
@@ -381,6 +382,9 @@ struct ipv6_work_info_t {
 typedef struct dhd_info {
 
 	dhd_pub_t pub;
+#ifdef DHD_RA_FILTER_TRIAL
+	struct dhd_ra_state ra;
+#endif
 	void *adapter;			/* adapter information, interrupt, fw path etc. */
 	char fw_path[PATH_MAX];		/* path to firmware image */
 	char nv_path[PATH_MAX];		/* path to nvram vars file */
@@ -952,6 +956,9 @@ void dhd_enable_packet_filter(int value, dhd_pub_t *dhd)
 {
 #ifdef PKT_FILTER_SUPPORT
 	int i;
+#endif
+	dhd_ra_begin(dhd->info, value);
+#ifdef PKT_FILTER_SUPPORT
 
 	DHD_TRACE(("%s: enter, value = %d\n", __FUNCTION__, value));
 	/* 1 - Enable packet filter, only allow unicast packet to send up */
@@ -974,7 +981,10 @@ void dhd_enable_packet_filter(int value, dhd_pub_t *dhd)
 		}
 	}
 #endif /* PKT_FILTER_SUPPORT */
+	dhd_ra_end(dhd->info, value);
 }
+
+#include "dhd_ra_filter_impl.h"
 
 static int dhd_set_suspend(int value, dhd_pub_t *dhd)
 {
@@ -2338,6 +2348,7 @@ dhd_rx_frame(dhd_pub_t *dhdp, int ifidx, void *pktbuf, int numpkt, uint8 chan)
 		 */
 		eth = skb->data;
 		len = skb->len;
+		dhd_ra_rx(dhd, ifidx, skb);
 
 #ifdef DHD_8021X_DUMP
 		dump_data = skb->data;
@@ -3580,6 +3591,7 @@ dhd_stop(struct net_device *net)
 #endif  /* CUSTOMER_HW4 && PLATFORM_SLP */
 	DHD_OS_WAKE_LOCK(&dhd->pub);
 	DHD_TRACE(("%s: Enter %p\n", __FUNCTION__, net));
+	dhd_ra_quiesce(dhd);
 	if (dhd->pub.up == 0) {
 		goto exit;
 	}
@@ -4337,6 +4349,7 @@ dhd_attach(osl_t *osh, struct dhd_bus *bus, uint bus_hdrlen)
 	mutex_init(&dhd->dhd_suspend_mutex);
 #endif
 	dhd_state |= DHD_ATTACH_STATE_WAKELOCKS_INIT;
+	dhd_ra_init(dhd);
 
 	/* Attach and link in the protocol */
 	if (dhd_prot_attach(&dhd->pub) != 0) {
@@ -6249,6 +6262,7 @@ void dhd_detach(dhd_pub_t *dhdp)
 		return;
 
 	DHD_TRACE(("%s: Enter state 0x%x\n", __FUNCTION__, dhd->dhd_state));
+	dhd_ra_quiesce(dhd);
 
 	dhd->pub.up = 0;
 	if (!(dhd->dhd_state & DHD_ATTACH_STATE_DONE)) {
@@ -6338,6 +6352,7 @@ void dhd_detach(dhd_pub_t *dhdp)
 #ifdef DHD_LOG_DUMP
 	dhd_log_dump_deinit(&dhd->pub);
 #endif /* DHD_LOG_DUMP */
+	dhd_ra_destroy(dhd);
 #ifdef WL_CFG80211
 	if (dhd->dhd_state & DHD_ATTACH_STATE_CFG80211) {
 		wl_cfg80211_detach(NULL);
@@ -7042,6 +7057,8 @@ int net_os_set_suspend_disable(struct net_device *dev, int val)
 	if (dhd) {
 		ret = dhd->pub.suspend_disable_flag;
 		dhd->pub.suspend_disable_flag = val;
+		if (val)
+			dhd_ra_before(dhd, false);
 	}
 	return ret;
 }
@@ -7138,6 +7155,8 @@ int net_os_rxfilter_add_remove(struct net_device *dev, int add_remove, int num)
 			return -EINVAL;
 	}
 
+	/* Serialize framework changes with the temporary firmware table. */
+	dhd_ra_begin(dhd, true);
 	/* Add filter */
 	if (add_remove) {
 		dhd->pub.pktfilter[num] = filterp;
@@ -7148,6 +7167,7 @@ int net_os_rxfilter_add_remove(struct net_device *dev, int add_remove, int num)
 			dhd->pub.pktfilter[num] = NULL;
 		}
 	}
+	dhd_ra_end(dhd, false);
 	return ret;
 #endif /* CUSTOMER_HW4 && GAN_LITE_NAT_KEEPALIVE_FILTER */
 }
