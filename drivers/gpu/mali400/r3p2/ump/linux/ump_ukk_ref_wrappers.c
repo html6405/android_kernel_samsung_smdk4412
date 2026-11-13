@@ -14,6 +14,7 @@
  */
 
 
+#include <linux/err.h>
 #include <asm/uaccess.h>             /* user space access */
 
 #include "ump_osk.h"
