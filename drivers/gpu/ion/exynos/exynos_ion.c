@@ -15,6 +15,7 @@
  */
 
 #include <linux/err.h>
+#include <linux/module.h>
 #include <linux/ion.h>
 #include <linux/platform_device.h>
 #include <linux/mm.h>
@@ -414,12 +415,26 @@ static void ion_exynos_heap_destroy(struct ion_heap *heap)
 	kfree(heap);
 }
 
+static unsigned int optional_contig_reserve_kb = 40 * 1024;
+module_param(optional_contig_reserve_kb, uint, S_IRUGO | S_IWUSR);
+MODULE_PARM_DESC(optional_contig_reserve_kb,
+		 "Contiguous KiB kept free from optional ION allocations");
+
 static int ion_exynos_contig_heap_allocate(struct ion_heap *heap,
 					   struct ion_buffer *buffer,
 					   unsigned long len,
 					   unsigned long align,
 					   unsigned long flags)
 {
+	if (flags & ION_EXYNOS_OPTIONAL_MASK) {
+		struct cma_info mem_info;
+
+		if (cma_info(&mem_info, exynos_ion_dev, 0) ||
+		    mem_info.free_size < len +
+				((size_t)optional_contig_reserve_kb << 10))
+			return -ENOMEM;
+	}
+
 	buffer->priv_phys = cma_alloc(exynos_ion_dev, NULL, len, align);
 
 #ifdef CONFIG_ION_EXYNOS_CONTIGHEAP_DEBUG
@@ -467,6 +482,9 @@ static int ion_exynos_contig_heap_allocate(struct ion_heap *heap,
 		int err;
 		int buffer_cnt = 0;
 		int size = 0;
+
+		if (flags & ION_EXYNOS_OPTIONAL_MASK)
+			return (int)buffer->priv_phys;
 
 		pr_err("%s: get cma alloc for ION failed\n", __func__);
 		err = cma_info(&mem_info, exynos_ion_dev, 0);
