@@ -82,6 +82,18 @@ config BCMDHD_NVRAM_PATH
 	---help---
 	  Path to the calibration file.
 
+config BCMDHD_RA_FILTER_DEFAULT_ON
+	bool "Enable duplicate empty RA offload at boot"
+	depends on ARCH_EXYNOS4 && (BCM4330 || BCM4334)
+	default y
+	help
+	  Start the guarded duplicate empty Router Advertisement offload enabled.
+	  The ra_filter module parameter still permits runtime disabling, and all
+	  packet, firmware-policy and lifecycle checks remain in effect.
+	  Enabled by default for Exynos4 BCM4330/BCM4334 boards. Unfamiliar
+	  firmware filter policies are rejected at runtime. Disable this option
+	  to retain manual opt-in on a board.
+
 config DHD_USE_STATIC_BUF
 	bool "Enable memory preallocation"
 	depends on BCMDHD

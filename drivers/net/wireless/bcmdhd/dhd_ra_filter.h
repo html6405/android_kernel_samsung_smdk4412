@@ -1,8 +1,8 @@
-/* Optional P4NOTE firmware offload for repeated, empty IPv6 RAs. */
+/* Guarded Exynos4 firmware offload for repeated, empty IPv6 RAs. */
 #ifndef _DHD_RA_FILTER_H
 #define _DHD_RA_FILTER_H
 
-#if defined(CONFIG_MACH_P4NOTE) && defined(PKT_FILTER_SUPPORT) && \
+#if defined(CONFIG_ARCH_EXYNOS4) && defined(PKT_FILTER_SUPPORT) && \
     defined(DHD_USE_WAKEUP_SOURCES)
 #define DHD_RA_FILTER_TRIAL
 #include <linux/alarmtimer.h>
