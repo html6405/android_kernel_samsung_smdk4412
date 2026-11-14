@@ -1,14 +1,14 @@
 /* Included once by dhd_linux.c, after its private structure/filter helpers.
- * Experimental and disabled by default. No software RX packet is dropped.
+ * Kconfig selects the boot default. No software RX packet is dropped.
  * Only a repeatedly observed, byte-identical empty withdrawal RA is offloaded.
  * Other/changed RAs invalidate the experiment for the current screen-off epoch.
  */
 #ifdef DHD_RA_FILTER_TRIAL
 #include <net/ipv6.h>
 #include "dhd_ra_packet.h"
-static bool dhd_ra_filter;
+static bool dhd_ra_filter = IS_ENABLED(CONFIG_BCMDHD_RA_FILTER_DEFAULT_ON);
 module_param_named(ra_filter, dhd_ra_filter, bool, 0644);
-MODULE_PARM_DESC(ra_filter, "Experimental P4NOTE duplicate empty-RA offload; default off");
+MODULE_PARM_DESC(ra_filter, "Guarded Exynos4 duplicate empty-RA offload; Kconfig-selected default");
 
 #define DHD_RA_BLOCK_SECONDS 120
 #define DHD_RA_OPEN_SECONDS 30

@@ -1,13 +1,19 @@
-P4NOTE duplicate empty Router Advertisement offload (opt-in trial)
-================================================================
+Exynos4 duplicate empty Router Advertisement offload
+==================================================
 
 Some access points deliver IPv6 multicast Router Advertisements (RAs) to
 the station's unicast Ethernet address. The ordinary multicast MAC filter
 does not stop these frames. Frequent repetitions can therefore wake the
 host, taking the modem and battery work through resume as well.
 
-The optional ra_filter parameter is disabled by default. It is compiled
-only for CONFIG_MACH_P4NOTE with packet filtering and wakeup sources.
+The ra_filter boot default is selected by CONFIG_BCMDHD_RA_FILTER_DEFAULT_ON.
+The option defaults to y for Exynos4 boards with BCM4330 or BCM4334.
+This covers the N8000/N8010/N8020, I9300/I9305, N7100/T0LTE and
+N5100/N5110/N5120 families in this tree without requiring per-board
+configuration additions. Other Exynos4 BCM4330 boards inherit the default.
+The offload is compiled only for CONFIG_ARCH_EXYNOS4 with packet filtering
+and wakeup sources. Runtime packet and firmware-policy checks still gate
+actual filtering; the enabled parameter alone does not install a rule.
 This is a limited firmware-offload experiment, not a general RA cache.
 
 Eligibility and operation
@@ -57,14 +63,19 @@ Control (root device shell)
     cat /sys/module/dhd/parameters/ra_filter
     echo 1 > /sys/module/dhd/parameters/ra_filter
 
-Enable while awake, then turn the display off. The parameter is evaluated
-on subsequent filter/worker transitions, not synchronously by its sysfs
+On supported Exynos4 boards the parameter starts enabled after every boot;
+the driver still waits for screen-off and suitable repeated packets before filtering.
+For a board with the disabled default, enable while awake, then turn the
+display off. The parameter is evaluated on subsequent filter/worker transitions, not synchronously by its sysfs
 setter. For immediate return to normal operation, disable it and wake
 the display or restart Wi-Fi:
 
     echo 0 > /sys/module/dhd/parameters/ra_filter
 
-Runtime enabling is not persistent; the next boot defaults to disabled.
+Runtime writes are not persistent; the next boot uses the Kconfig-selected
+default again. To build a permanently disabled default, unset
+CONFIG_BCMDHD_RA_FILTER_DEFAULT_ON. The boot parameter dhd.ra_filter=0
+can also override the compiled default.
 Logs use the "RA offload:" prefix. wlan_ra_transition should not remain
 active after a transition completes.
 
@@ -90,4 +101,25 @@ An overnight observation covered about 8h34 without USB, with battery
 indication 100 -> 96%, about 93.6% suspend after the initial warmup and
 158 wakeups/hour (previously often 450-560/hour). This was observational,
 not a controlled long A/B comparison with identical background activity.
-Other IPv6 networks remain unvalidated; retain the opt-in default.
+Hardware validation so far covers GT-N8000 only. The other boards inherit
+the enabled default by policy and still need hardware validation, starting
+with N8010 and then N8020. Other IPv6 networks remain unvalidated. The same
+packet and firmware-policy guards apply on every board.
+
+Default-on rollout (2026-11-14)
+------------------------------
+
+Validated olddefconfig resolves CONFIG_BCMDHD_RA_FILTER_DEFAULT_ON=y for
+lineageos_{n8000,n8010,i925,i9300,i9305,n7100,t0lte,n5100,n5110,n5120,i9100}.
+The N8020 device tree currently selects lineageos_i925_defconfig. Explicit
+CONFIG_BCMDHD_RA_FILTER_DEFAULT_ON=n survives olddefconfig as an override.
+Host eligibility/observation tests passed with ASan and UBSan. Full N8000
+zImage build and N8010/I9300 dhd_linux.o compilation passed with GCC 12.3.
+The additional I9100 driver build exposed an existing request_sock.h
+assumption about skc_net with CONFIG_NET_NS disabled; its legacy defconfig
+requires separate review. No other defconfig settings were changed here.
+
+Next full product/build validation order: N8010, N8020, then the remaining
+models. Only N8000 has prior runtime and overnight offload measurements;
+configuration resolution or object compilation does not establish runtime
+compatibility or battery savings on another board.
