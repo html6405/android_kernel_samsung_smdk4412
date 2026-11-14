@@ -123,3 +123,14 @@ Next full product/build validation order: N8010, N8020, then the remaining
 models. Only N8000 has prior runtime and overnight offload measurements;
 configuration resolution or object compilation does not establish runtime
 compatibility or battery savings on another board.
+
+N8000 post-flash default-on check passed on 2026-11-14, with kernel
+3.4.67-HTML6405-ra-auto. The original ramdisk was retained, BOOT backed up,
+and the complete written 8 MiB partition checksum verified before reboot.
+Android finished booting and ra_filter read Y before any sysfs activation
+write. Firmware mode 0 with active IDs 200/201/202 appeared automatically
+about 32 seconds after screen-off. Display wake restored mode 1 and removed
+all trial IDs; the gateway ping returned 3/3 replies. Another screen-off
+again installed IDs 200/201/202 without changing ra_filter. No BUG, Oops or
+panic appeared, and wlan_ra_transition had active_since=0 after transition.
+This USB-connected functional test does not measure standby battery drain.
