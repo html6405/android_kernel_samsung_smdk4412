@@ -258,22 +258,15 @@ static mali_physical_memory_allocation_result os_allocator_allocate_page_table_b
 	MALI_DEBUG_ASSERT_POINTER(ctx);
 	info = (os_allocator*)ctx;
 
-	/* Ensure we don't allocate more than we're supposed to from the ctx */
+	/* Serialize page-table allocation and shared memory accounting. */
 	if (_MALI_OSK_ERR_OK != _mali_osk_lock_wait(info->mutex, _MALI_OSK_LOCKMODE_RW)) return MALI_MEM_ALLOC_INTERNAL_FAILURE;
 
-	/* if the number of pages to be requested lead to exceeding the memory
-	 * limit in info->num_pages_max, reduce the size that is to be requested. */
-	while ( (info->num_pages_allocated + (1 << allocation_order) > info->num_pages_max)
-	        && _mali_osk_mem_check_allocated(info->num_pages_max * _MALI_OSK_CPU_PAGE_SIZE) )
-	{
-		if ( allocation_order > 0 ) {
-			--allocation_order;
-		} else {
-			/* return OOM */
-			_mali_osk_lock_signal(info->mutex, _MALI_OSK_LOCKMODE_RW);
-			return MALI_MEM_ALLOC_NONE;
-		}
-	}
+	/* Samsung's OS-backed buffer allocator above intentionally permits
+	 * allocations beyond num_pages_max. Page tables share that accounting,
+	 * so enforcing the old buffer limit here can reject even one table page
+	 * while the system still has memory. Follow the same OS-backed policy;
+	 * the DMA allocator below remains responsible for allocation failures.
+	 */
 
 	/* try to allocate 2^(allocation_order) pages, if that fails, try
 	 * allocation_order-1 to allocation_order 0 (inclusive) */
