@@ -58,6 +58,8 @@
 #include <linux/memcontrol.h>
 #include <linux/prefetch.h>
 #include <linux/page-debug-flags.h>
+#include <linux/hash.h>
+#include <linux/stacktrace.h>
 
 #include <asm/tlbflush.h>
 #include <asm/div64.h>
@@ -725,6 +727,91 @@ static void free_one_page(struct zone *zone, struct page *page, int order,
 	spin_unlock(&zone->lock);
 }
 
+#ifdef CONFIG_DEBUG_PAGE_SANITIZE_HISTORY
+#define SANITIZE_HISTORY_BITS 12
+#define SANITIZE_STACK_DEPTH 12
+struct sanitize_free_record {
+	unsigned long pfn;
+	unsigned long when;
+	unsigned long stack[SANITIZE_STACK_DEPTH];
+	unsigned int nr_entries;
+	pid_t pid;
+	char comm[TASK_COMM_LEN];
+	bool valid;
+	bool interrupt;
+};
+
+/* Bounded diagnostic cache, not a complete page-owner database. */
+static struct sanitize_free_record sanitize_history[1 << SANITIZE_HISTORY_BITS];
+static DEFINE_SPINLOCK(sanitize_history_lock);
+
+static void page_sanitize_record_free(struct page *page)
+{
+	struct sanitize_free_record record = { .pfn = page_to_pfn(page) };
+	struct stack_trace trace = {
+		.max_entries = SANITIZE_STACK_DEPTH,
+		.entries = record.stack,
+		.skip = 1,
+	};
+	unsigned long flags;
+
+	save_stack_trace(&trace);
+	record.nr_entries = trace.nr_entries;
+	record.when = jiffies;
+	record.pid = current->pid;
+	memcpy(record.comm, current->comm, TASK_COMM_LEN);
+	record.interrupt = in_interrupt();
+	record.valid = true;
+	spin_lock_irqsave(&sanitize_history_lock, flags);
+	sanitize_history[hash_long(record.pfn, SANITIZE_HISTORY_BITS)] = record;
+	spin_unlock_irqrestore(&sanitize_history_lock, flags);
+}
+
+static void page_sanitize_dump_history(struct page *page)
+{
+	struct sanitize_free_record record;
+	unsigned long flags, pfn = page_to_pfn(page);
+	unsigned int i;
+
+	spin_lock_irqsave(&sanitize_history_lock, flags);
+	record = sanitize_history[hash_long(pfn, SANITIZE_HISTORY_BITS)];
+	spin_unlock_irqrestore(&sanitize_history_lock, flags);
+	if (!record.valid || record.pfn != pfn) {
+		pr_emerg("page sanitize: free history unavailable (unrecorded or evicted)\n");
+		return;
+	}
+	pr_emerg("page sanitize: last recorded free pid=%d comm=%.16s irq=%d age_jiffies=%lu\n",
+		 record.pid, record.comm, record.interrupt, jiffies - record.when);
+	for (i = 0; i < record.nr_entries; i++)
+		pr_emerg("page sanitize: free stack %pS\n", (void *)record.stack[i]);
+}
+#else
+static inline void page_sanitize_record_free(struct page *page) { }
+static inline void page_sanitize_dump_history(struct page *page) { }
+#endif
+
+/* Cold failure path: preserve the fatal check, but explain what it found. */
+void page_sanitize_report(struct page *page, void *kaddr, void *bad,
+			  const char *phase)
+{
+	unsigned long offset = (char *)bad - (char *)kaddr;
+	unsigned long start = offset > 64 ? (offset - 64) & ~15UL : 0;
+	void *again;
+
+	pr_emerg("page sanitize: phase=%s pfn=%lx offset=%lu byte_now=%02x pid=%d comm=%.16s irq=%d\n",
+		 phase, page_to_pfn(page), offset, *(unsigned char *)bad,
+		 current->pid, current->comm, in_interrupt());
+	again = memchr_inv(kaddr, 0, PAGE_SIZE);
+	pr_emerg("page sanitize: second scan offset=%ld (-1 means now zero)\n",
+		 again ? (long)((char *)again - (char *)kaddr) : -1L);
+	dump_page(page);
+	page_sanitize_dump_history(page);
+	print_hex_dump(KERN_EMERG, "page sanitize: data ", DUMP_PREFIX_OFFSET,
+		       16, 1, (char *)kaddr + start,
+		       min(128UL, PAGE_SIZE - start), false);
+	dump_stack();
+}
+
 static bool free_pages_prepare(struct page *page, unsigned int order)
 {
 	int i;
@@ -748,8 +835,13 @@ static bool free_pages_prepare(struct page *page, unsigned int order)
 					   PAGE_SIZE << order);
 	}
 
-	for (; index; --index)
+	for (; index; --index) {
 		sanitize_highpage(page + index - 1);
+#ifdef CONFIG_DEBUG_PAGE_SANITIZE_HISTORY
+		sanitize_highpage_check(page + index - 1, "after-clear");
+#endif
+		page_sanitize_record_free(page + index - 1);
+	}
 
 	arch_free_page(page, order);
 	kernel_map_pages(page, 1 << order, 0);

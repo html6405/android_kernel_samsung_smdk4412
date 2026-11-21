@@ -309,6 +309,18 @@ config BOOTPARAM_HUNG_TASK_PANIC_VALUE
 	default 0 if !BOOTPARAM_HUNG_TASK_PANIC
 	default 1 if BOOTPARAM_HUNG_TASK_PANIC
 
+config DEBUG_PAGE_SANITIZE_HISTORY
+	bool "Track page sanitization failures"
+	depends on DEBUG_KERNEL && STACKTRACE
+	default n
+	help
+	  Keep a bounded, hashed history of the most recent page frees and
+	  verify pages immediately after clearing them as well as on allocation.
+	  A sanitization failure prints the matching free stack if retained.
+	  Hash collisions evict history, so a missing entry is not evidence
+	  that a page was never freed. Adds allocation/free overhead and roughly
+	  400 KiB of static memory on 32-bit systems. For diagnostic kernels only.
+
 config SCHED_DEBUG
 	bool "Collect scheduler debugging info"
 	depends on DEBUG_KERNEL && PROC_FS

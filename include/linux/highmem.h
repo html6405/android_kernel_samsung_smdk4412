@@ -256,13 +256,26 @@ static inline void sanitize_highpage(struct page *page)
 	local_irq_restore(flags);
 }
 
-static inline void sanitize_highpage_verify(struct page *page)
+void page_sanitize_report(struct page *page, void *kaddr, void *bad,
+			  const char *phase);
+
+static inline void sanitize_highpage_check(struct page *page, const char *phase)
 {
 	void *kaddr;
+	void *bad;
 
 	kaddr = kmap_atomic(page);
-	BUG_ON(memchr_inv(kaddr, 0, PAGE_SIZE));
+	bad = memchr_inv(kaddr, 0, PAGE_SIZE);
+	if (unlikely(bad)) {
+		page_sanitize_report(page, kaddr, bad, phase);
+		BUG();
+	}
 	kunmap_atomic(kaddr);
+}
+
+static inline void sanitize_highpage_verify(struct page *page)
+{
+	sanitize_highpage_check(page, "allocation");
 }
 
 static inline void zero_user_segments(struct page *page,
