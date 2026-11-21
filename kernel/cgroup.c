@@ -2304,7 +2304,8 @@ static int attach_task_by_pid(struct cgroup *cgrp, u64 pid, bool threadgroup)
 		tcred = __task_cred(tsk);
 		if (cred->euid &&
 		    cred->euid != tcred->uid &&
-		    cred->euid != tcred->suid) {
+		    cred->euid != tcred->suid &&
+		    !capable(CAP_SYS_NICE)) {
 			rcu_read_unlock();
 			cgroup_unlock();
 			return -EACCES;
