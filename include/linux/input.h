@@ -857,6 +857,7 @@ struct input_keymap_entry {
 #define SW_ROTATE_LOCK		0x0c  /* set = rotate locked/disabled */
 #define SW_LINEIN_INSERT	0x0d  /* set = inserted */
 #define SW_PEN_INSERT			0x0e	/* set = pen out */
+#define SW_PEN_INSERTED		0x0f	/* set = pen inserted (standard Linux ABI) */
 #define SW_STROBE_INSERT		0x0f	/* set = strobe out */
 //#ifdef CONFIG_SENSORS_HALL
 //#define SW_FLIP			0x10  /* set = flip cover... */

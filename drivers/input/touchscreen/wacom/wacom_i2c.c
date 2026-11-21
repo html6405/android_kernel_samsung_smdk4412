@@ -486,7 +486,7 @@ static void pen_insert_work(struct work_struct *work)
 		__func__, wac_i2c->pen_insert);
 
 	input_report_switch(wac_i2c->input_dev,
-		SW_PEN_INSERT, !wac_i2c->pen_insert);
+		SW_PEN_INSERTED, wac_i2c->pen_insert);
 
 	input_report_key(wac_i2c->input_dev,
         KEY_WAKEUP, !wac_i2c->pen_insert);
@@ -557,7 +557,7 @@ static void wacom_i2c_set_input_values(struct i2c_client *client,
 
 	input_dev->evbit[0] |= BIT_MASK(EV_KEY);
 
-	input_set_capability(input_dev, EV_SW, SW_PEN_INSERT);
+	input_set_capability(input_dev, EV_SW, SW_PEN_INSERTED);
 	input_set_capability(input_dev, EV_KEY, KEY_WAKEUP);
 	input_set_capability(input_dev, EV_KEY, KEY_BACK);
 #ifdef WACOM_PEN_DETECT
